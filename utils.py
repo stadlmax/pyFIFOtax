@@ -46,29 +46,29 @@ def read_data(sub_dir, file_name):
 
     return df_deposits, df_sales, df_dividends, df_wire_transfers
 
+def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
+    # this is simply the sum of all gains and losses
+    # for tax reasons, we usually also want the sum of gains
+    # and the sum of losses
+    share_gain_series = df_shares["Gain [EUR]"]
+    share_losses = share_gain_series[share_gain_series < 0].sum()
+    share_gains = share_gain_series[share_gain_series > 0].sum()
 
-def write_report(
-    df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, file_name
-):
-    report_path = os.path.join(sub_dir, file_name)
-    writer = pd.ExcelWriter(report_path)
+    forex_gain_series = df_forex["Gain [EUR]"]
 
-    df_shares.to_excel(writer, sheet_name="Shares", index=False)
-    df_forex.to_excel(writer, sheet_name="Foreign Currencies", index=False)
-    df_dividends.to_excel(writer, sheet_name="Dividend Payments", index=False)
-    df_fees.to_excel(writer, sheet_name="Fees", index=False)
-    df_taxes.to_excel(writer, sheet_name="Tax Withholdings", index=False)
+    total_dividends = df_dividends["Amount [EUR]"].sum()
+    total_fees = df_fees["Amount [EUR]"].sum()
+    total_taxes = df_taxes["Amount [EUR]"].sum()
 
-    total_gain_shares = df_shares.iloc[-1]["Total Gain [EUR]"]
-    total_gain_forex = df_forex.iloc[-1]["Total Gain [EUR]"]
-
-    total_dividends = df_dividends.iloc[-1]["Amount [EUR]"]
-    total_fees = df_fees.iloc[-1]["Amount [EUR]"]
-    total_taxes = df_taxes.iloc[-1]["Amount [EUR]"]
-
-    total_foreign_gains = total_gain_shares + total_dividends
-    gains_from_shares = total_gain_shares if total_gain_shares > 0 else 0
-    losses_from_shares = -total_gain_shares if total_gain_shares < 0 else 0
+    # unlike a previous version, we have to split things here
+    # losses from share can only be compared to gains from shares
+    # hence, there is a "total" gain/loss and then separate gains and 
+    # losses from shares, e.g. one could have had a gain of 100
+    # and a loss of 150 over a year, i.e. a total loss of 50
+    total_foreign_gains = share_losses + share_gains + total_dividends
+    gains_from_shares = share_gains
+    losses_from_shares = -share_losses
+    total_gain_forex = forex_gain_series.sum()
 
     anlagen = [
         (
@@ -83,7 +83,7 @@ def write_report(
         ),
         (
             "Anlage KAP",
-            "Zeile 23: In den Zeilen 18 und 19 enthaltene Verluste aus der Veräußerung aus der Veräuerung von Aktien i. S. d. § 20 Abs. 2 Satz 1 Nr. 1 EStG",
+            "Zeile 23: In den Zeilen 18 und 19 enthaltene Verluste aus der Veräuerung von Aktien i. S. d. § 20 Abs. 2 Satz 1 Nr. 1 EStG",
             round(losses_from_shares, 2),
         ),
         (
@@ -99,7 +99,7 @@ def write_report(
         (
             "Anlage SO",
             "Zeilen 42 - 48: Gewinn / Verlust aus Verkauf von Fremdwährungen",
-            round(total_gain_forex, 2),
+            round(total_gain_forex, 2), # here: the sum should be fine
         ),
     ]
     summary = {
@@ -108,6 +108,19 @@ def write_report(
         "Value": [a[2] for a in anlagen],
     }
     df_summary = pd.DataFrame(summary)
+    return df_summary
+
+def write_report(
+    df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, file_name
+):
+    df_summary = summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes)
+    report_path = os.path.join(sub_dir, file_name)
+    writer = pd.ExcelWriter(report_path)
+    df_shares.to_excel(writer, sheet_name="Shares", index=False)
+    df_forex.to_excel(writer, sheet_name="Foreign Currencies", index=False)
+    df_dividends.to_excel(writer, sheet_name="Dividend Payments", index=False)
+    df_fees.to_excel(writer, sheet_name="Fees", index=False)
+    df_taxes.to_excel(writer, sheet_name="Tax Withholdings", index=False)   
     df_summary.to_excel(writer, sheet_name="ELSTER - Summary", index=False)
     writer.close()
 
@@ -154,16 +167,8 @@ def forex_dict_to_df(forex_dict, mode):
             tmp["Amount"].append(amount)
             if mode == "daily":
                 tmp["Amount [EUR]"].append(round(f.amount_eur_daily, 2))
-                total_amount += round(f.amount_eur_daily, 2)
             else:
                 tmp["Amount [EUR]"].append(round(f.amount_eur_monthly, 2))
-                total_amount += round(f.amount_eur_monthly, 2)
-
-    tmp["Symbol"].append("Total")
-    tmp["Comment"].append("")
-    tmp["Date"].append("")
-    tmp["Amount"].append("")
-    tmp["Amount [EUR]"].append(round(total_amount, 2))
 
     df = pd.DataFrame(
         tmp, columns=["Symbol", "Comment", "Date", "Amount", "Amount [EUR]"]
@@ -224,7 +229,7 @@ def transact_dict_to_df(transact_dict, mode):
         "Sell Price": [],
         "Buy Price [EUR]": [],
         "Sell Price [EUR]": [],
-        "Total Gain [EUR]": [],
+        "Gain [EUR]": [],
     }
 
     total_gain = 0
@@ -247,23 +252,11 @@ def transact_dict_to_df(transact_dict, mode):
             if mode.lower() == "daily":
                 tmp["Buy Price [EUR]"].append(round(f.buy_price_eur_daily, 2))
                 tmp["Sell Price [EUR]"].append(round(f.sell_price_eur_daily, 2))
-                tmp["Total Gain [EUR]"].append(round(f.gain_eur_daily, 2))
-                total_gain += round(f.gain_eur_daily, 2)
+                tmp["Gain [EUR]"].append(round(f.gain_eur_daily, 2))
             else:
                 tmp["Buy Price [EUR]"].append(round(f.buy_price_eur_monthly, 2))
                 tmp["Sell Price [EUR]"].append(round(f.sell_price_eur_monthly, 2))
-                tmp["Total Gain [EUR]"].append(round(f.gain_eur_monthly, 2))
-                total_gain += round(f.gain_eur_monthly, 2)
-
-    tmp["Symbol"].append("Total")
-    tmp["Quantity"].append("")
-    tmp["Buy Date"].append("")
-    tmp["Sell Date"].append("")
-    tmp["Buy Price"].append("")
-    tmp["Sell Price"].append("")
-    tmp["Buy Price [EUR]"].append("")
-    tmp["Sell Price [EUR]"].append("")
-    tmp["Total Gain [EUR]"].append(round(total_gain, 2))
+                tmp["Gain [EUR]"].append(round(f.gain_eur_monthly, 2))
 
     df = pd.DataFrame(
         tmp,
@@ -276,7 +269,7 @@ def transact_dict_to_df(transact_dict, mode):
             "Sell Price",
             "Buy Price [EUR]",
             "Sell Price [EUR]",
-            "Total Gain [EUR]",
+            "Gain [EUR]",
         ],
     )
     return df
