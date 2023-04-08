@@ -10,6 +10,9 @@ For the history of transactions, you don't have to bother about converting to EU
 
 For the reference rates, you might have to download a newer version depending on your report year. Currently, all years until 2022 are supported. And while it would be possible to have a variety of different foreign currencies based on this data, it is currently mainly intened in combination with USD.
 
+# ESPP and RSUs
+Shares coming from ESPPs or RSU lapses can be treated differently. With ESPP often being sold directly after they are bought, it could actually reduce the reporting burden as one wouldn't expect capital gains from these transactions. If users want to do so, they should indicate the separate treatment by noting down the shares with a different symbol in all relevant transactions, e.g. by using `NVDA-ESPP` and `NVDA-RSU` instead of only `NVDA`. The reporting then will separate them in different calculations. 
+
 # Report Generation
 `create_report.py` will generate the report for you. Usage:
 ```
