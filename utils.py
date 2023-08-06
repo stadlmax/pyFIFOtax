@@ -236,7 +236,7 @@ def filter_transact_dict(
     return filtered_dict
 
 
-def transact_dict_to_df(transact_dict, mode):
+def transact_dict_to_df(transact_dict, mode, us_date_format = False, round_total_digits = 2):
     assert mode.lower() in ["daily", "monthly_avg"]
     tmp = {
         "Symbol": [],
@@ -248,9 +248,10 @@ def transact_dict_to_df(transact_dict, mode):
         "Buy Price [EUR]": [],
         "Sell Price [EUR]": [],
         "Gain [EUR]": [],
+        "Total Buy [EUR]": [],
+        "Total Sell [EUR]": []
     }
 
-    total_gain = 0
     for k, v in transact_dict.items():
 
         for f in v:
@@ -259,10 +260,16 @@ def transact_dict_to_df(transact_dict, mode):
                 tmp["Quantity"].append(int(f.quantity))
             else:
                 tmp["Quantity"].append(round(f.quantity, 2))
-            buy_date = f"{f.buy_date.year}-{f.buy_date.month:02}-{f.buy_date.day:02}"
-            sell_date = (
-                f"{f.sell_date.year}-{f.sell_date.month:02}-{f.sell_date.day:02}"
-            )
+
+            if us_date_format:
+                # US date format
+                buy_date = f"{f.buy_date.year}-{f.buy_date.month:02}-{f.buy_date.day:02}"
+                sell_date = f"{f.sell_date.year}-{f.sell_date.month:02}-{f.sell_date.day:02}"
+            else:
+                # EU date format
+                buy_date = f"{f.buy_date.day:02}.{f.buy_date.month:02}.{f.buy_date.year}"
+                sell_date = f"{f.sell_date.day:02}.{f.sell_date.month:02}.{f.sell_date.year}"
+
             tmp["Buy Date"].append(buy_date)
             tmp["Sell Date"].append(sell_date)
             tmp["Buy Price"].append(f"{f.buy_price:.2f} {f.currency}")
@@ -271,10 +278,14 @@ def transact_dict_to_df(transact_dict, mode):
                 tmp["Buy Price [EUR]"].append(round(f.buy_price_eur_daily, 2))
                 tmp["Sell Price [EUR]"].append(round(f.sell_price_eur_daily, 2))
                 tmp["Gain [EUR]"].append(round(f.gain_eur_daily, 2))
+                tmp["Total Buy [EUR]"].append(round(f.buy_price_eur_daily * tmp["Quantity"][-1], round_total_digits))
+                tmp["Total Sell [EUR]"].append(round(f.sell_price_eur_daily * tmp["Quantity"][-1], round_total_digits))
             else:
                 tmp["Buy Price [EUR]"].append(round(f.buy_price_eur_monthly, 2))
                 tmp["Sell Price [EUR]"].append(round(f.sell_price_eur_monthly, 2))
                 tmp["Gain [EUR]"].append(round(f.gain_eur_monthly, 2))
+                tmp["Total Buy [EUR]"].append(round(f.buy_price_eur_monthly * tmp["Quantity"][-1], round_total_digits))
+                tmp["Total Sell [EUR]"].append(round(f.sell_price_eur_monthly * tmp["Quantity"][-1], round_total_digits))
 
     df = pd.DataFrame(
         tmp,
@@ -288,6 +299,8 @@ def transact_dict_to_df(transact_dict, mode):
             "Buy Price [EUR]",
             "Sell Price [EUR]",
             "Gain [EUR]",
+            "Total Buy [EUR]",
+            "Total Sell [EUR]"
         ],
     )
     return df
