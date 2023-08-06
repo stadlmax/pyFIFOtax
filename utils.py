@@ -29,20 +29,38 @@ def get_reference_rates():
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
 
-def read_data(sub_dir, file_name):
+def read_data(sub_dir, file_name: str):
+    def from_url(url):
+        import gspread
+
+        gc = gspread.oauth()
+
+        sh = gc.open_by_url(url)
+
+        df_deposits = pd.DataFrame(sh.worksheet("deposits").get_all_records()).astype({'date': 'datetime64[ns]'})
+        df_sales = pd.DataFrame(sh.worksheet("sales").get_all_records()).astype({'date': 'datetime64[ns]'})
+        df_dividends = pd.DataFrame(sh.worksheet("dividends").get_all_records()).astype({'date': 'datetime64[ns]'})
+        df_wire_transfers = pd.DataFrame(sh.worksheet("wire_transfers").get_all_records()).astype({'date': 'datetime64[ns]'})
+
+        return df_deposits, df_sales, df_dividends, df_wire_transfers
+
+    if file_name.startswith('http'):
+        # load from google-sheets URL
+        df_deposits, df_sales, df_dividends, df_wire_transfers = from_url(file_name)
+
+    else:
+        file_path = os.path.join(sub_dir, file_name)
+        df_deposits = pd.read_excel(file_path, sheet_name="deposits")
+        df_sales = pd.read_excel(file_path, sheet_name="sales")
+        df_dividends = pd.read_excel(file_path, sheet_name="dividends")
+        df_wire_transfers = pd.read_excel(file_path, sheet_name="wire_transfers")
+
     # read list of deposits, sales, dividend payments and wire transfers
     # sort them to ensure that they are in chronological order
-    file_path = os.path.join(sub_dir, file_name)
-    df_deposits = pd.read_excel(file_path, sheet_name="deposits").sort_index(
-        ascending=True
-    )
-    df_sales = pd.read_excel(file_path, sheet_name="sales").sort_index(ascending=True)
-    df_dividends = pd.read_excel(file_path, sheet_name="dividends").sort_index(
-        ascending=True
-    )
-    df_wire_transfers = pd.read_excel(
-        file_path, sheet_name="wire_transfers"
-    ).sort_index(ascending=True)
+    df_deposits.sort_index(ascending=True, inplace=True)
+    df_sales.sort_index(ascending=True, inplace=True)
+    df_dividends.sort_index(ascending=True, inplace=True)
+    df_wire_transfers.sort_index(ascending=True, inplace=True)
 
     return df_deposits, df_sales, df_dividends, df_wire_transfers
 
@@ -62,7 +80,7 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
 
     # unlike a previous version, we have to split things here
     # losses from share can only be compared to gains from shares
-    # hence, there is a "total" gain/loss and then separate gains and 
+    # hence, there is a "total" gain/loss and then separate gains and
     # losses from shares, e.g. one could have had a gain of 100
     # and a loss of 150 over a year, i.e. a total loss of 50
     total_foreign_gains = share_losses + share_gains + total_dividends
@@ -111,16 +129,16 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     return df_summary
 
 def write_report(
-    df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, file_name
+    df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, report_file_name
 ):
     df_summary = summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes)
-    report_path = os.path.join(sub_dir, file_name)
+    report_path = os.path.join(sub_dir, report_file_name)
     writer = pd.ExcelWriter(report_path)
     df_shares.to_excel(writer, sheet_name="Shares", index=False)
     df_forex.to_excel(writer, sheet_name="Foreign Currencies", index=False)
     df_dividends.to_excel(writer, sheet_name="Dividend Payments", index=False)
     df_fees.to_excel(writer, sheet_name="Fees", index=False)
-    df_taxes.to_excel(writer, sheet_name="Tax Withholdings", index=False)   
+    df_taxes.to_excel(writer, sheet_name="Tax Withholdings", index=False)
     df_summary.to_excel(writer, sheet_name="ELSTER - Summary", index=False)
     writer.close()
 
