@@ -50,17 +50,17 @@ def read_data(sub_dir, file_name: str):
 
     else:
         file_path = os.path.join(sub_dir, file_name)
-        df_deposits = pd.read_excel(file_path, sheet_name="deposits")
-        df_sales = pd.read_excel(file_path, sheet_name="sales")
-        df_dividends = pd.read_excel(file_path, sheet_name="dividends")
-        df_wire_transfers = pd.read_excel(file_path, sheet_name="wire_transfers")
+        df_deposits = pd.read_excel(file_path, sheet_name="deposits").astype({'date': 'datetime64[ns]'})
+        df_sales = pd.read_excel(file_path, sheet_name="sales").astype({'date': 'datetime64[ns]'})
+        df_dividends = pd.read_excel(file_path, sheet_name="dividends").astype({'date': 'datetime64[ns]'})
+        df_wire_transfers = pd.read_excel(file_path, sheet_name="wire_transfers").astype({'date': 'datetime64[ns]'})
 
     # read list of deposits, sales, dividend payments and wire transfers
     # sort them to ensure that they are in chronological order
-    df_deposits.sort_index(ascending=True, inplace=True)
-    df_sales.sort_index(ascending=True, inplace=True)
-    df_dividends.sort_index(ascending=True, inplace=True)
-    df_wire_transfers.sort_index(ascending=True, inplace=True)
+    df_deposits.sort_values('date', inplace=True)
+    df_sales.sort_values('date', inplace=True)
+    df_dividends.sort_values('date', inplace=True)
+    df_wire_transfers.sort_values('date', inplace=True)
 
     return df_deposits, df_sales, df_dividends, df_wire_transfers
 
