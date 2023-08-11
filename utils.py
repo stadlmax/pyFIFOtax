@@ -101,7 +101,7 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
         ),
         (
             "Anlage KAP",
-            "Zeile 23: In den Zeilen 18 und 19 enthaltene Verluste aus der Veräuerung von Aktien i. S. d. § 20 Abs. 2 Satz 1 Nr. 1 EStG",
+            "Zeile 23: In den Zeilen 18 und 19 enthaltene Verluste aus der Veräußerung von Aktien i. S. d. § 20 Abs. 2 Satz 1 Nr. 1 EStG",
             round(losses_from_shares, 2),
         ),
         (
@@ -157,7 +157,7 @@ def filter_forex_dict(forex_dict, report_year):
     filtered_dict = {k: [] for k in forex_dict.keys()}
     for k, v in forex_dict.items():
         for f in v:
-            # filter based on date of fee / taxaction /etc. event
+            # filter based on date of fee / tax-action /etc. event
             if f.date.year == report_year:
                 filtered_dict[k].append(f)
     for k, v in filtered_dict.items():

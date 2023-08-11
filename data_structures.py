@@ -53,9 +53,7 @@ class FIFOObject:
         self.gain_eur_daily = None
         self.gain_eur_monthly = None
 
-        # class representing a FOREX object subject to FIFO treatment
-
-
+# class representing a Forex object subject to FIFO treatment
 class FIFOForex(FIFOObject):
     def __init__(self, currency, quantity, buy_date, source):
         # "money" is always a single unit "money"
