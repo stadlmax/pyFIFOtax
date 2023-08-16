@@ -129,7 +129,8 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     return df_summary
 
 def write_report(
-    df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, report_file_name
+    df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, report_file_name,
+    drop_zero_taxes = True
 ):
     df_summary = summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes)
     report_path = os.path.join(sub_dir, report_file_name)
@@ -138,7 +139,9 @@ def write_report(
     df_forex.to_excel(writer, sheet_name="Foreign Currencies", index=False)
     df_dividends.to_excel(writer, sheet_name="Dividend Payments", index=False)
     df_fees.to_excel(writer, sheet_name="Fees", index=False)
-    df_taxes.to_excel(writer, sheet_name="Tax Withholdings", index=False)
+    (df_taxes if not drop_zero_taxes else df_taxes[df_taxes["Amount"].map(
+        lambda x: not x.startswith("0.00 "))]).to_excel(
+            writer, sheet_name="Tax Withholdings", index=False)
     df_summary.to_excel(writer, sheet_name="ELSTER - Summary", index=False)
     writer.close()
 
