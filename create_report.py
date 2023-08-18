@@ -20,8 +20,7 @@ parser.add_argument(
     "-f",
     dest="file_name",
     type=str,
-    default="transactions.xlsx",
-    help="file for list of transactions (input), default is 'transactions.xlsx'",
+    help="file for list of transactions (input). If begins with 'http', parses data from google drive sheet instead",
 )
 parser.add_argument(
     "-y",

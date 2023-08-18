@@ -198,7 +198,7 @@ class ReportData:
 
     def process_wire_transfers(self, df_wire_transfers):
         # when doing a wire transfer, you sell
-        # the USD you posess in the quivalent amount of EUR
+        # the USD you possess in the equivalent amount of EUR
         # this includes the fee you pay for the transfer
         for row_idx, row in df_wire_transfers.iterrows():
             sold_quantity = row.net_amount + row.fees

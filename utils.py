@@ -29,20 +29,38 @@ def get_reference_rates():
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
 
-def read_data(sub_dir, file_name):
+def read_data(sub_dir, file_name: str):
+    def from_url(url):
+        import gspread
+
+        gc = gspread.oauth()
+
+        sh = gc.open_by_url(url)
+
+        df_deposits = pd.DataFrame(sh.worksheet("deposits").get_all_records()).astype({'date': 'datetime64[ns]'})
+        df_sales = pd.DataFrame(sh.worksheet("sales").get_all_records()).astype({'date': 'datetime64[ns]'})
+        df_dividends = pd.DataFrame(sh.worksheet("dividends").get_all_records()).astype({'date': 'datetime64[ns]'})
+        df_wire_transfers = pd.DataFrame(sh.worksheet("wire_transfers").get_all_records()).astype({'date': 'datetime64[ns]'})
+
+        return df_deposits, df_sales, df_dividends, df_wire_transfers
+
+    if file_name.startswith('http'):
+        # load from google-sheets URL
+        df_deposits, df_sales, df_dividends, df_wire_transfers = from_url(file_name)
+
+    else:
+        file_path = os.path.join(sub_dir, file_name)
+        df_deposits = pd.read_excel(file_path, sheet_name="deposits").astype({'date': 'datetime64[ns]'})
+        df_sales = pd.read_excel(file_path, sheet_name="sales").astype({'date': 'datetime64[ns]'})
+        df_dividends = pd.read_excel(file_path, sheet_name="dividends").astype({'date': 'datetime64[ns]'})
+        df_wire_transfers = pd.read_excel(file_path, sheet_name="wire_transfers").astype({'date': 'datetime64[ns]'})
+
     # read list of deposits, sales, dividend payments and wire transfers
     # sort them to ensure that they are in chronological order
-    file_path = os.path.join(sub_dir, file_name)
-    df_deposits = pd.read_excel(file_path, sheet_name="deposits").sort_index(
-        ascending=True
-    )
-    df_sales = pd.read_excel(file_path, sheet_name="sales").sort_index(ascending=True)
-    df_dividends = pd.read_excel(file_path, sheet_name="dividends").sort_index(
-        ascending=True
-    )
-    df_wire_transfers = pd.read_excel(
-        file_path, sheet_name="wire_transfers"
-    ).sort_index(ascending=True)
+    df_deposits.sort_values('date', inplace=True)
+    df_sales.sort_values('date', inplace=True)
+    df_dividends.sort_values('date', inplace=True)
+    df_wire_transfers.sort_values('date', inplace=True)
 
     return df_deposits, df_sales, df_dividends, df_wire_transfers
 
@@ -62,7 +80,7 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
 
     # unlike a previous version, we have to split things here
     # losses from share can only be compared to gains from shares
-    # hence, there is a "total" gain/loss and then separate gains and 
+    # hence, there is a "total" gain/loss and then separate gains and
     # losses from shares, e.g. one could have had a gain of 100
     # and a loss of 150 over a year, i.e. a total loss of 50
     total_foreign_gains = share_losses + share_gains + total_dividends
@@ -83,7 +101,7 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
         ),
         (
             "Anlage KAP",
-            "Zeile 23: In den Zeilen 18 und 19 enthaltene Verluste aus der Veräuerung von Aktien i. S. d. § 20 Abs. 2 Satz 1 Nr. 1 EStG",
+            "Zeile 23: In den Zeilen 18 und 19 enthaltene Verluste aus der Veräußerung von Aktien i. S. d. § 20 Abs. 2 Satz 1 Nr. 1 EStG",
             round(losses_from_shares, 2),
         ),
         (
@@ -111,16 +129,19 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     return df_summary
 
 def write_report(
-    df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, file_name
+    df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, report_file_name,
+    drop_zero_taxes = True
 ):
     df_summary = summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes)
-    report_path = os.path.join(sub_dir, file_name)
+    report_path = os.path.join(sub_dir, report_file_name)
     writer = pd.ExcelWriter(report_path)
     df_shares.to_excel(writer, sheet_name="Shares", index=False)
     df_forex.to_excel(writer, sheet_name="Foreign Currencies", index=False)
     df_dividends.to_excel(writer, sheet_name="Dividend Payments", index=False)
     df_fees.to_excel(writer, sheet_name="Fees", index=False)
-    df_taxes.to_excel(writer, sheet_name="Tax Withholdings", index=False)   
+    (df_taxes if not drop_zero_taxes else df_taxes[df_taxes["Amount"].map(
+        lambda x: not x.startswith("0.00 "))]).to_excel(
+            writer, sheet_name="Tax Withholdings", index=False)
     df_summary.to_excel(writer, sheet_name="ELSTER - Summary", index=False)
     writer.close()
 
@@ -139,7 +160,7 @@ def filter_forex_dict(forex_dict, report_year):
     filtered_dict = {k: [] for k in forex_dict.keys()}
     for k, v in forex_dict.items():
         for f in v:
-            # filter based on date of fee / taxaction /etc. event
+            # filter based on date of fee / tax-action /etc. event
             if f.date.year == report_year:
                 filtered_dict[k].append(f)
     for k, v in filtered_dict.items():
@@ -218,7 +239,7 @@ def filter_transact_dict(
     return filtered_dict
 
 
-def transact_dict_to_df(transact_dict, mode):
+def transact_dict_to_df(transact_dict, mode, us_date_format = False, round_total_digits = 2):
     assert mode.lower() in ["daily", "monthly_avg"]
     tmp = {
         "Symbol": [],
@@ -230,9 +251,10 @@ def transact_dict_to_df(transact_dict, mode):
         "Buy Price [EUR]": [],
         "Sell Price [EUR]": [],
         "Gain [EUR]": [],
+        "Total Buy [EUR]": [],
+        "Total Sell [EUR]": []
     }
 
-    total_gain = 0
     for k, v in transact_dict.items():
 
         for f in v:
@@ -241,10 +263,16 @@ def transact_dict_to_df(transact_dict, mode):
                 tmp["Quantity"].append(int(f.quantity))
             else:
                 tmp["Quantity"].append(round(f.quantity, 2))
-            buy_date = f"{f.buy_date.year}-{f.buy_date.month:02}-{f.buy_date.day:02}"
-            sell_date = (
-                f"{f.sell_date.year}-{f.sell_date.month:02}-{f.sell_date.day:02}"
-            )
+
+            if us_date_format:
+                # US date format
+                buy_date = f"{f.buy_date.year}-{f.buy_date.month:02}-{f.buy_date.day:02}"
+                sell_date = f"{f.sell_date.year}-{f.sell_date.month:02}-{f.sell_date.day:02}"
+            else:
+                # EU date format
+                buy_date = f"{f.buy_date.day:02}.{f.buy_date.month:02}.{f.buy_date.year}"
+                sell_date = f"{f.sell_date.day:02}.{f.sell_date.month:02}.{f.sell_date.year}"
+
             tmp["Buy Date"].append(buy_date)
             tmp["Sell Date"].append(sell_date)
             tmp["Buy Price"].append(f"{f.buy_price:.2f} {f.currency}")
@@ -253,10 +281,14 @@ def transact_dict_to_df(transact_dict, mode):
                 tmp["Buy Price [EUR]"].append(round(f.buy_price_eur_daily, 2))
                 tmp["Sell Price [EUR]"].append(round(f.sell_price_eur_daily, 2))
                 tmp["Gain [EUR]"].append(round(f.gain_eur_daily, 2))
+                tmp["Total Buy [EUR]"].append(round(f.buy_price_eur_daily * tmp["Quantity"][-1], round_total_digits))
+                tmp["Total Sell [EUR]"].append(round(f.sell_price_eur_daily * tmp["Quantity"][-1], round_total_digits))
             else:
                 tmp["Buy Price [EUR]"].append(round(f.buy_price_eur_monthly, 2))
                 tmp["Sell Price [EUR]"].append(round(f.sell_price_eur_monthly, 2))
                 tmp["Gain [EUR]"].append(round(f.gain_eur_monthly, 2))
+                tmp["Total Buy [EUR]"].append(round(f.buy_price_eur_monthly * tmp["Quantity"][-1], round_total_digits))
+                tmp["Total Sell [EUR]"].append(round(f.sell_price_eur_monthly * tmp["Quantity"][-1], round_total_digits))
 
     df = pd.DataFrame(
         tmp,
@@ -270,6 +302,8 @@ def transact_dict_to_df(transact_dict, mode):
             "Buy Price [EUR]",
             "Sell Price [EUR]",
             "Gain [EUR]",
+            "Total Buy [EUR]",
+            "Total Sell [EUR]"
         ],
     )
     return df

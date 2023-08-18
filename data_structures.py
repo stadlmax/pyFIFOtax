@@ -1,5 +1,5 @@
 # class for representing a foreign currency to cover dividend payments, fees, quellensteuer, etc.
-# these are separated from FIFO treatments of forgein currencies
+# these are separated from FIFO treatments of foreign currencies
 class Forex:
     def __init__(self, currency, date, amount, comment):
         self.currency = currency
@@ -53,9 +53,7 @@ class FIFOObject:
         self.gain_eur_daily = None
         self.gain_eur_monthly = None
 
-        # class representing a FOREX object subject to FIFO treatment
-
-
+# class representing a Forex object subject to FIFO treatment
 class FIFOForex(FIFOObject):
     def __init__(self, currency, quantity, buy_date, source):
         # "money" is always a single unit "money"
