@@ -25,6 +25,7 @@ def get_reference_rates():
     ).mean()
 
     supported_currencies = set(daily_ex_rates.columns)
+    supported_currencies.add('EUR')
     print(f"INFO: supported currencies are: {supported_currencies}\n")
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
@@ -128,11 +129,15 @@ def write_report(
 def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
     for k, v in forex_dict.items():
         for f in v:
-            # exchange rates are in 1 EUR : X FOREX
-            f.amount_eur_daily = f.amount / daily_rates[f.currency][f.date]
-            f.amount_eur_monthly = (
-                f.amount / monthly_rates[f.currency][f.date.year, f.date.month]
-            )
+            if f.currency == 'EUR':
+                f.amount_eur_daily = f.amount
+                f.amount_eur_monthly = f.amount
+            else:
+                # exchange rates are in 1 EUR : X FOREX
+                f.amount_eur_daily = f.amount / daily_rates[f.currency][f.date]
+                f.amount_eur_monthly = (
+                    f.amount / monthly_rates[f.currency][f.date.year, f.date.month]
+                )
 
 
 def filter_forex_dict(forex_dict, report_year):
@@ -179,16 +184,25 @@ def forex_dict_to_df(forex_dict, mode):
 def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
     for k, v in trans_dict.items():
         for f in v:
-            # exchange rates are in 1 EUR : X FOREX
             buy_price, sell_price = f.buy_price, f.sell_price
-            buy_rate_daily = daily_rates[f.currency][f.buy_date]
-            buy_rate_monthly = monthly_rates[f.currency][
-                f.buy_date.year, f.buy_date.month
-            ]
-            sell_rate_daily = daily_rates[f.currency][f.sell_date]
-            sell_rate_monthly = monthly_rates[f.currency][
-                f.sell_date.year, f.sell_date.month
-            ]
+
+            if f.currency == 'EUR':
+                buy_rate_daily = 1
+                buy_rate_monthly = 1
+                sell_rate_daily = 1
+                sell_rate_monthly = 1
+            else:
+                # exchange rates are in 1 EUR : X FOREX
+
+                buy_rate_daily = daily_rates[f.currency][f.buy_date]
+                buy_rate_monthly = monthly_rates[f.currency][
+                    f.buy_date.year, f.buy_date.month
+                ]
+                sell_rate_daily = daily_rates[f.currency][f.sell_date]
+                sell_rate_monthly = monthly_rates[f.currency][
+                    f.sell_date.year, f.sell_date.month
+                ]
+
             f.buy_price_eur_daily = buy_price / buy_rate_daily
             f.buy_price_eur_monthly = buy_price / buy_rate_monthly
             f.sell_price_eur_daily = sell_price / sell_rate_daily
