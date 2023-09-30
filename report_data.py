@@ -150,10 +150,25 @@ class ReportData:
             report_file_name,
         )
 
+    def add_fees(self, row, comment):
+        if row.fees < 0:
+            raise ValueError(f"On {row.date} the fee of {row.fees} {row.currency} is negative")
+
+        if hasattr(row, 'fees') and row.fees > 0:
+            new_fees = Forex(
+                currency=row.currency,
+                date=row.date,
+                amount=row.fees,
+                comment=comment,
+            )
+
+            self.fees[row.currency].append(new_fees)
+
     def process_deposits(self, df_deposits):
         # deposits of shares are simple, as df is assumed to be sorted
         # just build list of stocks (unit of 1 as smallest unit)
         for row_idx, row in df_deposits.iterrows():
+            self.add_fees(row, f"Buying {row.symbol}")
             symbol, new_shares = FIFOShare.from_deposits_row(row)
             self.held_shares[symbol].push(new_shares)
 
@@ -186,13 +201,8 @@ class ReportData:
             # for completeness, we add them to "fees" which will mainly comprise fees for wire transfers
             # technically: one should also separate those as these fees here might just might be used
             # to compute the "Kapitalertrag"
-            new_fees = Forex(
-                currency=row.currency,
-                date=row.date,
-                amount=row.fees,
-                comment="Fees on Sale of Shares",
-            )
-            self.fees[row.currency].append(new_fees)
+            self.add_fees(row, f"Selling {row.symbol}")
+
             currency, new_forex = FIFOForex.from_share_sale(row)
             self.held_forex[row.currency].push(new_forex)
 
@@ -209,10 +219,4 @@ class ReportData:
                 t.sell_price = 1  # currency unit
             self.sold_forex[sold_currency].extend(tmp)
 
-            new_fees = Forex(
-                currency=row.currency,
-                date=row.date,
-                amount=row.fees,
-                comment="Fee on Wire Transfer",
-            )
-            self.fees[row.currency].append(new_fees)
+            self.add_fees(row, "Wire transfer")
