@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+from datetime import timedelta
 
 
 def get_date(forex):
@@ -134,7 +135,18 @@ def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
                 f.amount_eur_monthly = f.amount
             else:
                 # exchange rates are in 1 EUR : X FOREX
-                f.amount_eur_daily = f.amount / daily_rates[f.currency][f.date]
+                day = f.date
+                if f.date not in daily_rates[f.currency]:
+                    # On weekends the currency exchange doesn't operate. Go back some days in time to find a valid value
+                    for day_reduce in range(1, 7):
+                        day = f.date - timedelta(days=day_reduce)
+                        if day in daily_rates[f.currency]:
+                            break
+                        else:
+                            raise ValueError(f"{f.currency} currency exchange rate cannot be found for {f.date} or "
+                                             "the preceding seven days")
+
+                f.amount_eur_daily = f.amount / daily_rates[f.currency][day]
                 f.amount_eur_monthly = (
                     f.amount / monthly_rates[f.currency][f.date.year, f.date.month]
                 )
