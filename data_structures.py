@@ -146,17 +146,18 @@ class FIFOQueue:
 
     def pop(self, quantity):
         if quantity > self.total_quantity + 0.05:  # accounting for some rounding errors
-            raise ValueError(
-                "Cannot pop quantity larger than all quantities in FIFOQueue!"
-            )
+            if not self.is_empty() and self.assets[0].__class__.__name__ == "FIFOShare":
+                symbol = self.assets[0].symbol
+                raise ValueError(f"Cannot sell more shares than owned overall. Symbol: {symbol}")
+            else:
+                raise ValueError(
+                    "Cannot pop quantity larger than all quantities in FIFOQueue!"
+                )
 
         if quantity < 0:
             raise ValueError("Cannot pop negative quantity from FIFOQueue!")
 
-        if quantity == 0:
-            return []
-
-        if self.is_empty():
+        if quantity == 0 or self.is_empty():
             return []
 
         front_quantity = self.assets[0].quantity
