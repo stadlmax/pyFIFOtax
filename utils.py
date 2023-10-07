@@ -27,7 +27,7 @@ def get_reference_rates():
 
     supported_currencies = set(daily_ex_rates.columns)
     supported_currencies.add('EUR')
-    print(f"INFO: supported currencies are: {supported_currencies}\n")
+
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
 

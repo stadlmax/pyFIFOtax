@@ -91,7 +91,8 @@ class ReportData:
 
         if unsupported_currencies:
             raise ValueError(
-                f"Currencies {unsupported_currencies} are not supported as exchange rate data is missing, check 'supported currencies' for automated reports."
+                f"Currencies {unsupported_currencies} are not supported as exchange rate data is missing.\n"
+                f"Supported currencies are: {sorted(self.supported_currencies)}"
             )
 
         self._init_data_dicts(symbols, currencies)
