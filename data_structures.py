@@ -82,6 +82,7 @@ class FIFOForex(FIFOObject):
 
         return row.currency, new_forex
 
+    @staticmethod
     def from_share_sale(row):
         net_proceeds = row.sell_price * row.quantity - row.fees
         assert (

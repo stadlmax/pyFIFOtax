@@ -48,6 +48,7 @@ def read_data(sub_dir, file_name):
 
     return df_deposits, df_sales, df_dividends, df_wire_transfers
 
+
 def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     # this is simply the sum of all gains and losses
     # for tax reasons, we usually also want the sum of gains
@@ -101,7 +102,7 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
         (
             "Anlage SO",
             "Zeilen 42 - 48: Gewinn / Verlust aus Verkauf von Fremdwährungen",
-            round(total_gain_forex, 2), # here: the sum should be fine
+            round(total_gain_forex, 2),  # here: the sum should be fine
         ),
     ]
     summary = {
@@ -111,6 +112,7 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     }
     df_summary = pd.DataFrame(summary)
     return df_summary
+
 
 def write_report(
     df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, file_name
@@ -173,7 +175,6 @@ def forex_dict_to_df(forex_dict, mode):
         "Amount": [],
         "Amount [EUR]": [],
     }
-    total_amount = 0
     for k, v in forex_dict.items():
         for f in v:
             tmp["Symbol"].append(k)
@@ -258,9 +259,7 @@ def transact_dict_to_df(transact_dict, mode):
         "Gain [EUR]": [],
     }
 
-    total_gain = 0
     for k, v in transact_dict.items():
-
         for f in v:
             tmp["Symbol"].append(k)
             if f.__class__.__name__ == "FIFOShare":

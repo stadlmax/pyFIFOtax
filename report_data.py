@@ -5,6 +5,7 @@ from utils import apply_rates_transact_dict, filter_transact_dict, transact_dict
 import pandas as pd
 import numpy as np
 
+
 class ReportData:
     def __init__(self, sub_dir: str, file_name: str):
         # sub_dir and file_name for the raw data
