@@ -19,18 +19,18 @@ class ReportData:
         self.held_shares = {}
         self.sold_shares = {}
 
-        # list of forgein currencies: dividend payments and sell orders
+        # list of foreign currencies: dividend payments and sell orders
         self.held_forex = {}
         self.sold_forex = {}
         # Besides maintaining a list of ingoing and outgoing streams
         # of "foreign" currencies, we keep separate lists
         # - fees (pot. Werbungskosten),
         # - taxes (i.e. "Quellensteuer" or withheld taxes on dividends),
-        # - and dividend payments themselvs.
+        # - and dividend payments themselves.
         # Those are relevant for the report year and don't have to
         # follow a FIFO principle. Besides e.g. gains on dividends,
         # one - in addition - also might have to consider gains/losses from
-        # holding forgein currencies, which is covered by the "forex" above.
+        # holding foreign currencies, which is covered by the "forex" above.
         self.fees = {}
         self.taxes = {}
         self.dividends = {}
@@ -236,7 +236,7 @@ class ReportData:
 
     def process_wire_transfers(self, df_wire_transfers):
         # when doing a wire transfer, you sell
-        # the USD you posess in the quivalent amount of EUR
+        # the USD you possess in the equivalent amount of EUR
         # this includes the fee you pay for the transfer
         for row_idx, row in df_wire_transfers.iterrows():
             sold_quantity = row.net_amount + row.fees

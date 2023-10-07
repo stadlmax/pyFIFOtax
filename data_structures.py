@@ -1,5 +1,5 @@
 # class for representing a foreign currency to cover dividend payments, fees, quellensteuer, etc.
-# these are separated from FIFO treatments of forgein currencies
+# these are separated from FIFO treatments of foreign currencies
 class Forex:
     def __init__(self, currency, date, amount, comment):
         self.currency = currency

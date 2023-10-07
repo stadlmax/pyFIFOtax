@@ -14,7 +14,7 @@ def get_reference_rates():
     ]
     daily_ex_rates.index = pd.to_datetime(daily_ex_rates["Date"], format="%Y-%m-%d")
     # drop years earlier as 2009 as this would make reporting tax earning
-    # way more complicated anyways
+    # way more complicated anyway
     daily_ex_rates = daily_ex_rates.loc[daily_ex_rates.index.year >= 2009]
     # drop columns with nan values
     daily_ex_rates = daily_ex_rates.dropna(axis="columns")
@@ -122,7 +122,7 @@ def write_report(
     df_forex.to_excel(writer, sheet_name="Foreign Currencies", index=False)
     df_dividends.to_excel(writer, sheet_name="Dividend Payments", index=False)
     df_fees.to_excel(writer, sheet_name="Fees", index=False)
-    df_taxes.to_excel(writer, sheet_name="Tax Withholdings", index=False)   
+    df_taxes.to_excel(writer, sheet_name="Tax Withholding", index=False)
     df_summary.to_excel(writer, sheet_name="ELSTER - Summary", index=False)
     writer.close()
 
@@ -156,7 +156,7 @@ def filter_forex_dict(forex_dict, report_year):
     filtered_dict = {k: [] for k in forex_dict.keys()}
     for k, v in forex_dict.items():
         for f in v:
-            # filter based on date of fee / taxaction /etc. event
+            # filter based on date of fee / taxation /etc. event
             if f.date.year == report_year:
                 filtered_dict[k].append(f)
     for k, v in filtered_dict.items():

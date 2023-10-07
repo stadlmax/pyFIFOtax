@@ -4,11 +4,11 @@ from report_data import ReportData
 
 parser = argparse.ArgumentParser(
     description="Simple tool for calculating gains/losses from \
-        transactions with shares on foreign exchanges based on FIFO methos, \
+        transactions with shares on foreign exchanges based on FIFO methods, \
         intended for income tax reports in Germany. Note that the output of \
         this tool is just a suggestions and not a recommendations. \n \
-        There is no gurantuee for correctness. \n \
-        To be sure, please contact your tax advisor for reliable inforation."
+        There is no guarantee for correctness. \n \
+        To be sure, please contact your tax advisor for reliable information."
 )
 parser.add_argument(
     "-dir",
