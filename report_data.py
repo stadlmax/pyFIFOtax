@@ -199,7 +199,8 @@ class ReportData:
             currency, new_forex = FIFOForex.from_dividends_row(row)
             symbol, new_div, new_tax = Forex.from_dividends_row(row)
             self.dividends[symbol].append(new_div)
-            self.taxes[symbol].append(new_tax)
+            if new_tax.amount > 0:
+                self.taxes[symbol].append(new_tax)
             self.held_forex[currency].push(new_forex)
 
     def process_sales(self, df_sales):
