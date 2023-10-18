@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+from datetime import timedelta
 
 
 def get_date(forex):
@@ -13,7 +14,7 @@ def get_reference_rates():
     ]
     daily_ex_rates.index = pd.to_datetime(daily_ex_rates["Date"], format="%Y-%m-%d")
     # drop years earlier as 2009 as this would make reporting tax earning
-    # way more complicated anyways
+    # way more complicated anyway
     daily_ex_rates = daily_ex_rates.loc[daily_ex_rates.index.year >= 2009]
     # drop columns with nan values
     daily_ex_rates = daily_ex_rates.dropna(axis="columns")
@@ -25,7 +26,8 @@ def get_reference_rates():
     ).mean()
 
     supported_currencies = set(daily_ex_rates.columns)
-    print(f"INFO: supported currencies are: {supported_currencies}\n")
+    supported_currencies.add('EUR')
+
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
 
@@ -45,6 +47,7 @@ def read_data(sub_dir, file_name):
     ).sort_index(ascending=True)
 
     return df_deposits, df_sales, df_dividends, df_wire_transfers
+
 
 def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     # this is simply the sum of all gains and losses
@@ -99,7 +102,7 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
         (
             "Anlage SO",
             "Zeilen 42 - 48: Gewinn / Verlust aus Verkauf von Fremdwährungen",
-            round(total_gain_forex, 2), # here: the sum should be fine
+            round(total_gain_forex, 2),  # here: the sum should be fine
         ),
     ]
     summary = {
@@ -109,6 +112,7 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     }
     df_summary = pd.DataFrame(summary)
     return df_summary
+
 
 def write_report(
     df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, file_name
@@ -120,7 +124,7 @@ def write_report(
     df_forex.to_excel(writer, sheet_name="Foreign Currencies", index=False)
     df_dividends.to_excel(writer, sheet_name="Dividend Payments", index=False)
     df_fees.to_excel(writer, sheet_name="Fees", index=False)
-    df_taxes.to_excel(writer, sheet_name="Tax Withholdings", index=False)   
+    df_taxes.to_excel(writer, sheet_name="Tax Withholding", index=False)
     df_summary.to_excel(writer, sheet_name="ELSTER - Summary", index=False)
     writer.close()
 
@@ -128,18 +132,33 @@ def write_report(
 def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
     for k, v in forex_dict.items():
         for f in v:
-            # exchange rates are in 1 EUR : X FOREX
-            f.amount_eur_daily = f.amount / daily_rates[f.currency][f.date]
-            f.amount_eur_monthly = (
-                f.amount / monthly_rates[f.currency][f.date.year, f.date.month]
-            )
+            if f.currency == 'EUR':
+                f.amount_eur_daily = f.amount
+                f.amount_eur_monthly = f.amount
+            else:
+                # exchange rates are in 1 EUR : X FOREX
+                day = f.date
+                if f.date not in daily_rates[f.currency]:
+                    # On weekends the currency exchange doesn't operate. Go back some days in time to find a valid value
+                    for day_reduce in range(1, 7):
+                        day = f.date - timedelta(days=day_reduce)
+                        if day in daily_rates[f.currency]:
+                            break
+                        else:
+                            raise ValueError(f"{f.currency} currency exchange rate cannot be found for {f.date} or "
+                                             "the preceding seven days")
+
+                f.amount_eur_daily = f.amount / daily_rates[f.currency][day]
+                f.amount_eur_monthly = (
+                    f.amount / monthly_rates[f.currency][f.date.year, f.date.month]
+                )
 
 
 def filter_forex_dict(forex_dict, report_year):
     filtered_dict = {k: [] for k in forex_dict.keys()}
     for k, v in forex_dict.items():
         for f in v:
-            # filter based on date of fee / taxaction /etc. event
+            # filter based on date of fee / taxation /etc. event
             if f.date.year == report_year:
                 filtered_dict[k].append(f)
     for k, v in filtered_dict.items():
@@ -156,7 +175,6 @@ def forex_dict_to_df(forex_dict, mode):
         "Amount": [],
         "Amount [EUR]": [],
     }
-    total_amount = 0
     for k, v in forex_dict.items():
         for f in v:
             tmp["Symbol"].append(k)
@@ -179,16 +197,25 @@ def forex_dict_to_df(forex_dict, mode):
 def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
     for k, v in trans_dict.items():
         for f in v:
-            # exchange rates are in 1 EUR : X FOREX
             buy_price, sell_price = f.buy_price, f.sell_price
-            buy_rate_daily = daily_rates[f.currency][f.buy_date]
-            buy_rate_monthly = monthly_rates[f.currency][
-                f.buy_date.year, f.buy_date.month
-            ]
-            sell_rate_daily = daily_rates[f.currency][f.sell_date]
-            sell_rate_monthly = monthly_rates[f.currency][
-                f.sell_date.year, f.sell_date.month
-            ]
+
+            if f.currency == 'EUR':
+                buy_rate_daily = 1
+                buy_rate_monthly = 1
+                sell_rate_daily = 1
+                sell_rate_monthly = 1
+            else:
+                # exchange rates are in 1 EUR : X FOREX
+
+                buy_rate_daily = daily_rates[f.currency][f.buy_date]
+                buy_rate_monthly = monthly_rates[f.currency][
+                    f.buy_date.year, f.buy_date.month
+                ]
+                sell_rate_daily = daily_rates[f.currency][f.sell_date]
+                sell_rate_monthly = monthly_rates[f.currency][
+                    f.sell_date.year, f.sell_date.month
+                ]
+
             f.buy_price_eur_daily = buy_price / buy_rate_daily
             f.buy_price_eur_monthly = buy_price / buy_rate_monthly
             f.sell_price_eur_daily = sell_price / sell_rate_daily
@@ -232,9 +259,7 @@ def transact_dict_to_df(transact_dict, mode):
         "Gain [EUR]": [],
     }
 
-    total_gain = 0
     for k, v in transact_dict.items():
-
         for f in v:
             tmp["Symbol"].append(k)
             if f.__class__.__name__ == "FIFOShare":
