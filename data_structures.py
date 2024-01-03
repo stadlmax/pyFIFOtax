@@ -1,5 +1,5 @@
 # class for representing a foreign currency to cover dividend payments, fees, quellensteuer, etc.
-# these are separated from FIFO treatments of forgein currencies
+# these are separated from FIFO treatments of foreign currencies
 class Forex:
     def __init__(self, currency, date, amount, comment):
         self.currency = currency
@@ -82,6 +82,7 @@ class FIFOForex(FIFOObject):
 
         return row.currency, new_forex
 
+    @staticmethod
     def from_share_sale(row):
         net_proceeds = row.sell_price * row.quantity - row.fees
         assert (
@@ -146,17 +147,18 @@ class FIFOQueue:
 
     def pop(self, quantity):
         if quantity > self.total_quantity + 0.05:  # accounting for some rounding errors
-            raise ValueError(
-                "Cannot pop quantity larger than all quantities in FIFOQueue!"
-            )
+            if not self.is_empty() and self.assets[0].__class__.__name__ == "FIFOShare":
+                symbol = self.assets[0].symbol
+                raise ValueError(f"Cannot sell more shares than owned overall. Symbol: {symbol}")
+            else:
+                raise ValueError(
+                    "Cannot pop quantity larger than all quantities in FIFOQueue!"
+                )
 
         if quantity < 0:
             raise ValueError("Cannot pop negative quantity from FIFOQueue!")
 
-        if quantity == 0:
-            return []
-
-        if self.is_empty():
+        if quantity == 0 or self.is_empty():
             return []
 
         front_quantity = self.assets[0].quantity

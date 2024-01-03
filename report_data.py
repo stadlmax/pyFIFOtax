@@ -2,6 +2,8 @@ from data_structures import Forex, FIFOShare, FIFOForex, FIFOQueue
 from utils import get_reference_rates, read_data, write_report
 from utils import apply_rates_forex_dict, filter_forex_dict, forex_dict_to_df
 from utils import apply_rates_transact_dict, filter_transact_dict, transact_dict_to_df
+import pandas as pd
+import numpy as np
 
 
 class ReportData:
@@ -18,18 +20,18 @@ class ReportData:
         self.held_shares = {}
         self.sold_shares = {}
 
-        # list of forgein currencies: dividend payments and sell orders
+        # list of foreign currencies: dividend payments and sell orders
         self.held_forex = {}
         self.sold_forex = {}
         # Besides maintaining a list of ingoing and outgoing streams
         # of "foreign" currencies, we keep separate lists
         # - fees (pot. Werbungskosten),
         # - taxes (i.e. "Quellensteuer" or withheld taxes on dividends),
-        # - and dividend payments themselvs.
+        # - and dividend payments themselves.
         # Those are relevant for the report year and don't have to
         # follow a FIFO principle. Besides e.g. gains on dividends,
         # one - in addition - also might have to consider gains/losses from
-        # holding forgein currencies, which is covered by the "forex" above.
+        # holding foreign currencies, which is covered by the "forex" above.
         self.fees = {}
         self.taxes = {}
         self.dividends = {}
@@ -64,8 +66,24 @@ class ReportData:
             self.df_dividends,
             self.df_wire_transfers,
         ) = read_data(self.sub_dir, self.file_name)
-        currencies = self.df_deposits.currency.unique().tolist()
-        symbols = self.df_deposits.symbol.unique().tolist()
+        currencies = self.df_deposits.currency.unique()
+        symbols = self.df_deposits.symbol.unique()
+
+        extra_currencies = pd.concat([self.df_sales.currency, self.df_dividends.currency, self.df_wire_transfers.currency]).unique()
+        extra_currencies = np.setdiff1d(extra_currencies, currencies).tolist()
+        currencies = currencies.tolist()
+        if len(extra_currencies) > 0:
+            raise ValueError("Sales, dividends, or wire transfers contain additional currencies which are not present in buy transactions. "
+                             "Most likely this indicates an error.\n"
+                             f"Extra currencies: {extra_currencies}")
+
+        extra_symbols = pd.concat([self.df_sales.symbol, self.df_dividends.symbol]).unique()
+        extra_symbols = np.setdiff1d(extra_symbols, symbols).tolist()
+        symbols = symbols.tolist()
+        if len(extra_symbols) > 0:
+            raise ValueError("Sales or dividends contain additional symbols which are not present in buy transactions. "
+                             "Most likely this indicates an error.\n"
+                             f"Extra symbols: {extra_symbols}")
 
         unsupported_currencies = []
         for c in currencies:
@@ -74,7 +92,8 @@ class ReportData:
 
         if unsupported_currencies:
             raise ValueError(
-                f"Currencies {unsupported_currencies} are not supported as exchange rate data is missing, check 'supported currencies' for automated reports."
+                f"Currencies {unsupported_currencies} are not supported as exchange rate data is missing.\n"
+                f"Supported currencies are: {sorted(self.supported_currencies)}"
             )
 
         self._init_data_dicts(symbols, currencies)
@@ -150,11 +169,31 @@ class ReportData:
             report_file_name,
         )
 
+    def add_fees(self, row, comment):
+        if row.fees < 0:
+            raise ValueError(f"On {row.date} the fee of {row.fees} {row.currency} is negative")
+
+        if hasattr(row, 'fees') and row.fees > 0:
+            new_fees = Forex(
+                currency=row.currency,
+                date=row.date,
+                amount=row.fees,
+                comment=comment,
+            )
+
+            self.fees[row.currency].append(new_fees)
+
     def process_deposits(self, df_deposits):
         # deposits of shares are simple, as df is assumed to be sorted
         # just build list of stocks (unit of 1 as smallest unit)
         for row_idx, row in df_deposits.iterrows():
+            self.add_fees(row, f"Buying {row.symbol}")
             symbol, new_shares = FIFOShare.from_deposits_row(row)
+
+            if symbol in self.held_shares and not self.held_shares[symbol].is_empty():
+                if self.held_shares[symbol].assets[-1].currency != row.currency:
+                    raise NotImplementedError(f"It is not yet supported to buy the same symbol ('{row.symbol}') in different currencies")
+
             self.held_shares[symbol].push(new_shares)
 
     def process_dividends(self, df_dividends):
@@ -162,7 +201,8 @@ class ReportData:
             currency, new_forex = FIFOForex.from_dividends_row(row)
             symbol, new_div, new_tax = Forex.from_dividends_row(row)
             self.dividends[symbol].append(new_div)
-            self.taxes[symbol].append(new_tax)
+            if new_tax.amount > 0:
+                self.taxes[symbol].append(new_tax)
             self.held_forex[currency].push(new_forex)
 
     def process_sales(self, df_sales):
@@ -170,35 +210,35 @@ class ReportData:
         # - move shares from "held_shares" to "sold_shares"
         # - track "fee of sale" in "fees"
         # - track net proceeds in held_forex
-        for _, row in df_sales.iterrows():
+        for row_idx, row in df_sales.iterrows():
             sold_quantity = row.quantity
             sold_symbol = row.symbol
+
+            if sold_quantity < 0:
+                raise ValueError(f"In 'sales' tab, row number {row_idx + 2} for symbol '{sold_symbol}' the quantity is negative")
+
             tmp = self.held_shares[sold_symbol].pop(sold_quantity)
             for t in tmp:
                 t.sell_date = row.date
                 t.sell_price = row.sell_price
                 assert (
                     row.currency == t.currency
-                ), f"Currency for buying share and selling share not the same, got {t.currency} and {row.currency} respectively"
+                ), (f"Currencies for buying and selling a share are not the same. Got {t.currency} and {row.currency}, "
+                    f"respectively.\nSymbol: {t.symbol}, Buy date: {t.buy_date}, Sell date: {t.sell_date}")
             self.sold_shares[sold_symbol].extend(tmp)
 
             # technically: the fees for selling shares are small enough to neglect them
             # for completeness, we add them to "fees" which will mainly comprise fees for wire transfers
             # technically: one should also separate those as these fees here might just might be used
             # to compute the "Kapitalertrag"
-            new_fees = Forex(
-                currency=row.currency,
-                date=row.date,
-                amount=row.fees,
-                comment="Fees on Sale of Shares",
-            )
-            self.fees[row.currency].append(new_fees)
+            self.add_fees(row, f"Selling {row.symbol}")
+
             currency, new_forex = FIFOForex.from_share_sale(row)
             self.held_forex[row.currency].push(new_forex)
 
     def process_wire_transfers(self, df_wire_transfers):
         # when doing a wire transfer, you sell
-        # the USD you posess in the quivalent amount of EUR
+        # the USD you possess in the equivalent amount of EUR
         # this includes the fee you pay for the transfer
         for row_idx, row in df_wire_transfers.iterrows():
             sold_quantity = row.net_amount + row.fees
@@ -209,10 +249,4 @@ class ReportData:
                 t.sell_price = 1  # currency unit
             self.sold_forex[sold_currency].extend(tmp)
 
-            new_fees = Forex(
-                currency=row.currency,
-                date=row.date,
-                amount=row.fees,
-                comment="Fee on Wire Transfer",
-            )
-            self.fees[row.currency].append(new_fees)
+            self.add_fees(row, "Wire transfer")
