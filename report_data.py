@@ -1,9 +1,10 @@
+import numpy as np
+import pandas as pd
+
 from data_structures import Forex, FIFOShare, FIFOForex, FIFOQueue
-from utils import get_reference_rates, read_data, write_report
 from utils import apply_rates_forex_dict, filter_forex_dict, forex_dict_to_df
 from utils import apply_rates_transact_dict, filter_transact_dict, transact_dict_to_df
-import pandas as pd
-import numpy as np
+from utils import get_reference_rates, read_data, write_report
 
 
 class ReportData:

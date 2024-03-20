@@ -1,6 +1,6 @@
 import argparse
-from report_data import ReportData
 
+from report_data import ReportData
 
 parser = argparse.ArgumentParser(
     description="Simple tool for calculating gains/losses from \

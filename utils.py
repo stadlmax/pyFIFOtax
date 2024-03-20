@@ -1,6 +1,7 @@
 import os
-import pandas as pd
 from datetime import timedelta
+
+import pandas as pd
 
 
 def get_date(forex):
@@ -26,7 +27,7 @@ def get_reference_rates():
     ).mean()
 
     supported_currencies = set(daily_ex_rates.columns)
-    supported_currencies.add('EUR')
+    supported_currencies.add("EUR")
 
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
@@ -65,7 +66,7 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
 
     # unlike a previous version, we have to split things here
     # losses from share can only be compared to gains from shares
-    # hence, there is a "total" gain/loss and then separate gains and 
+    # hence, there is a "total" gain/loss and then separate gains and
     # losses from shares, e.g. one could have had a gain of 100
     # and a loss of 150 over a year, i.e. a total loss of 50
     total_foreign_gains = share_losses + share_gains + total_dividends
@@ -132,7 +133,7 @@ def write_report(
 def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
     for k, v in forex_dict.items():
         for f in v:
-            if f.currency == 'EUR':
+            if f.currency == "EUR":
                 f.amount_eur_daily = f.amount
                 f.amount_eur_monthly = f.amount
             else:
@@ -145,8 +146,10 @@ def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
                         if day in daily_rates[f.currency]:
                             break
                         else:
-                            raise ValueError(f"{f.currency} currency exchange rate cannot be found for {f.date} or "
-                                             "the preceding seven days")
+                            raise ValueError(
+                                f"{f.currency} currency exchange rate cannot be found for {f.date} or "
+                                "the preceding seven days"
+                            )
 
                 f.amount_eur_daily = f.amount / daily_rates[f.currency][day]
                 f.amount_eur_monthly = (
@@ -199,7 +202,7 @@ def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
         for f in v:
             buy_price, sell_price = f.buy_price, f.sell_price
 
-            if f.currency == 'EUR':
+            if f.currency == "EUR":
                 buy_rate_daily = 1
                 buy_rate_monthly = 1
                 sell_rate_daily = 1
