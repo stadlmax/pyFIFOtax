@@ -36,16 +36,18 @@ def read_data(sub_dir, file_name):
     # read list of deposits, sales, dividend payments and wire transfers
     # sort them to ensure that they are in chronological order
     file_path = os.path.join(sub_dir, file_name)
-    df_deposits = pd.read_excel(file_path, sheet_name="deposits").sort_index(
-        ascending=True
-    )
-    df_sales = pd.read_excel(file_path, sheet_name="sales").sort_index(ascending=True)
-    df_dividends = pd.read_excel(file_path, sheet_name="dividends").sort_index(
-        ascending=True
-    )
+    df_deposits = pd.read_excel(
+        file_path, sheet_name="deposits", parse_dates=["date"]
+    ).sort_values("date")
+    df_sales = pd.read_excel(
+        file_path, sheet_name="sales", parse_dates=["date"]
+    ).sort_values("date")
+    df_dividends = pd.read_excel(
+        file_path, sheet_name="dividends", parse_dates=["date"]
+    ).sort_values("date")
     df_wire_transfers = pd.read_excel(
-        file_path, sheet_name="wire_transfers"
-    ).sort_index(ascending=True)
+        file_path, sheet_name="wire_transfers", parse_dates=["date"]
+    ).sort_values("date")
 
     return df_deposits, df_sales, df_dividends, df_wire_transfers
 

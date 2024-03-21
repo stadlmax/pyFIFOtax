@@ -185,7 +185,7 @@ class ReportData:
             self.fees[row.currency].append(new_fees)
 
     def process_deposits(self, df_deposits):
-        # deposits of shares are simple, as df is assumed to be sorted
+        # deposits of shares are simple, as df_deposits is assumed to be sorted
         # just build list of stocks (unit of 1 as smallest unit)
         for row_idx, row in df_deposits.iterrows():
             self.add_fees(row, f"Buying {row.symbol}")
