@@ -117,19 +117,32 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     return df_summary
 
 
+def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
+    if df.empty:
+        return
+
+    df.to_excel(writer, sheet_name=name, index=False)
+    worksheet = writer.sheets[name]
+    worksheet.autofit()  # Adjust column widths to their maximum lengths
+    worksheet.set_landscape()
+    worksheet.set_paper(9)  # A4
+    worksheet.set_header(f"&C{name}")  # Put sheet name into the header
+    worksheet.hide_gridlines(0)  # Do not hide gridlines
+    worksheet.center_horizontally()
+
+
 def write_report(
     df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, file_name
 ):
     df_summary = summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes)
     report_path = os.path.join(sub_dir, file_name)
-    writer = pd.ExcelWriter(report_path)
-    df_shares.to_excel(writer, sheet_name="Shares", index=False)
-    df_forex.to_excel(writer, sheet_name="Foreign Currencies", index=False)
-    df_dividends.to_excel(writer, sheet_name="Dividend Payments", index=False)
-    df_fees.to_excel(writer, sheet_name="Fees", index=False)
-    df_taxes.to_excel(writer, sheet_name="Tax Withholding", index=False)
-    df_summary.to_excel(writer, sheet_name="ELSTER - Summary", index=False)
-    writer.close()
+    with pd.ExcelWriter(report_path, engine="xlsxwriter") as writer:
+        create_report_sheet("Shares", df_shares, writer)
+        create_report_sheet("Foreign Currencies", df_forex, writer)
+        create_report_sheet("Dividend Payments", df_dividends, writer)
+        create_report_sheet("Fees", df_fees, writer)
+        create_report_sheet("Tax Withholding", df_taxes, writer)
+        create_report_sheet("ELSTER - Summary", df_summary, writer)
 
 
 def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
