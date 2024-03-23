@@ -149,7 +149,9 @@ class FIFOQueue:
         if quantity > self.total_quantity + 0.05:  # accounting for some rounding errors
             if not self.is_empty() and self.assets[0].__class__.__name__ == "FIFOShare":
                 symbol = self.assets[0].symbol
-                raise ValueError(f"Cannot sell more shares than owned overall. Symbol: {symbol}")
+                raise ValueError(
+                    f"Cannot sell more shares than owned overall. Symbol: {symbol}"
+                )
             else:
                 raise ValueError(
                     "Cannot pop quantity larger than all quantities in FIFOQueue!"
