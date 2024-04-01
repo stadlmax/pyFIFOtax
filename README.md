@@ -29,7 +29,7 @@ Since all of the reportingn is done in a very simple and quite naive Python impl
 
 # Requirements
 - pandas
-- openpyxl
+- XlsxWriter
 
 # Disclaimer
 I am neither a lawyer nor a tax advisor. This is no tax advice. For me, this is a helpful tool. Feel free to use it but note that you should know what you are doing and you are responsible for reporting your taxes correctly.

@@ -1,6 +1,7 @@
 import os
-import pandas as pd
 from datetime import timedelta
+
+import pandas as pd
 
 
 def get_date(forex):
@@ -26,7 +27,7 @@ def get_reference_rates():
     ).mean()
 
     supported_currencies = set(daily_ex_rates.columns)
-    supported_currencies.add('EUR')
+    supported_currencies.add("EUR")
 
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
@@ -35,16 +36,18 @@ def read_data(sub_dir, file_name):
     # read list of deposits, sales, dividend payments and wire transfers
     # sort them to ensure that they are in chronological order
     file_path = os.path.join(sub_dir, file_name)
-    df_deposits = pd.read_excel(file_path, sheet_name="deposits").sort_index(
-        ascending=True
-    )
-    df_sales = pd.read_excel(file_path, sheet_name="sales").sort_index(ascending=True)
-    df_dividends = pd.read_excel(file_path, sheet_name="dividends").sort_index(
-        ascending=True
-    )
+    df_deposits = pd.read_excel(
+        file_path, sheet_name="deposits", parse_dates=["date"]
+    ).sort_values("date")
+    df_sales = pd.read_excel(
+        file_path, sheet_name="sales", parse_dates=["date"]
+    ).sort_values("date")
+    df_dividends = pd.read_excel(
+        file_path, sheet_name="dividends", parse_dates=["date"]
+    ).sort_values("date")
     df_wire_transfers = pd.read_excel(
-        file_path, sheet_name="wire_transfers"
-    ).sort_index(ascending=True)
+        file_path, sheet_name="wire_transfers", parse_dates=["date"]
+    ).sort_values("date")
 
     return df_deposits, df_sales, df_dividends, df_wire_transfers
 
@@ -65,7 +68,7 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
 
     # unlike a previous version, we have to split things here
     # losses from share can only be compared to gains from shares
-    # hence, there is a "total" gain/loss and then separate gains and 
+    # hence, there is a "total" gain/loss and then separate gains and
     # losses from shares, e.g. one could have had a gain of 100
     # and a loss of 150 over a year, i.e. a total loss of 50
     total_foreign_gains = share_losses + share_gains + total_dividends
@@ -114,25 +117,43 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     return df_summary
 
 
+def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
+    if df.empty:
+        return
+
+    if "Date" in df:
+        df.sort_values("Date", inplace=True)
+    elif "Sell Date" in df:
+        df.sort_values(["Sell Date", "Buy Date"], inplace=True)
+
+    df.to_excel(writer, sheet_name=name, index=False)
+    worksheet = writer.sheets[name]
+    worksheet.autofit()  # Adjust column widths to their maximum lengths
+    worksheet.set_landscape()
+    worksheet.set_paper(9)  # A4
+    worksheet.set_header(f"&C{name}")  # Put sheet name into the header
+    worksheet.hide_gridlines(0)  # Do not hide gridlines
+    worksheet.center_horizontally()
+
+
 def write_report(
     df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, file_name
 ):
     df_summary = summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes)
     report_path = os.path.join(sub_dir, file_name)
-    writer = pd.ExcelWriter(report_path)
-    df_shares.to_excel(writer, sheet_name="Shares", index=False)
-    df_forex.to_excel(writer, sheet_name="Foreign Currencies", index=False)
-    df_dividends.to_excel(writer, sheet_name="Dividend Payments", index=False)
-    df_fees.to_excel(writer, sheet_name="Fees", index=False)
-    df_taxes.to_excel(writer, sheet_name="Tax Withholding", index=False)
-    df_summary.to_excel(writer, sheet_name="ELSTER - Summary", index=False)
-    writer.close()
+    with pd.ExcelWriter(report_path, engine="xlsxwriter") as writer:
+        create_report_sheet("Shares", df_shares, writer)
+        create_report_sheet("Foreign Currencies", df_forex, writer)
+        create_report_sheet("Dividend Payments", df_dividends, writer)
+        create_report_sheet("Fees", df_fees, writer)
+        create_report_sheet("Tax Withholding", df_taxes, writer)
+        create_report_sheet("ELSTER - Summary", df_summary, writer)
 
 
 def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
     for k, v in forex_dict.items():
         for f in v:
-            if f.currency == 'EUR':
+            if f.currency == "EUR":
                 f.amount_eur_daily = f.amount
                 f.amount_eur_monthly = f.amount
             else:
@@ -145,8 +166,10 @@ def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
                         if day in daily_rates[f.currency]:
                             break
                         else:
-                            raise ValueError(f"{f.currency} currency exchange rate cannot be found for {f.date} or "
-                                             "the preceding seven days")
+                            raise ValueError(
+                                f"{f.currency} currency exchange rate cannot be found for {f.date} or "
+                                "the preceding seven days"
+                            )
 
                 f.amount_eur_daily = f.amount / daily_rates[f.currency][day]
                 f.amount_eur_monthly = (
@@ -199,7 +222,7 @@ def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
         for f in v:
             buy_price, sell_price = f.buy_price, f.sell_price
 
-            if f.currency == 'EUR':
+            if f.currency == "EUR":
                 buy_rate_daily = 1
                 buy_rate_monthly = 1
                 sell_rate_daily = 1
