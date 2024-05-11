@@ -238,13 +238,12 @@ class ReportData:
             self.held_forex[row.currency].push(new_forex)
 
     def process_wire_transfers(self, df_wire_transfers):
-        # when doing a wire transfer, you sell
-        # the USD you possess in the equivalent amount of EUR
-        # this includes the fee you pay for the transfer
+        # When doing a wire transfer, you convert the USD you possess into the equivalent amount of EUR.
+        # This doesn't include the fee you pay for the transfer, that just vanishes
         for row_idx, row in df_wire_transfers.iterrows():
-            sold_quantity = row.net_amount + row.fees
             sold_currency = row.currency
-            tmp = self.held_forex[sold_currency].pop(sold_quantity)
+            self.held_forex[sold_currency].pop(row.fees)  # remove fees
+            tmp = self.held_forex[sold_currency].pop(row.net_amount)
             for t in tmp:
                 t.sell_date = row.date
                 t.sell_price = 1  # currency unit
