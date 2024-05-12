@@ -1,5 +1,8 @@
 # class for representing a foreign currency to cover dividend payments, fees, quellensteuer, etc.
 # these are separated from FIFO treatments of foreign currencies
+import math
+
+
 class Forex:
     def __init__(self, currency, date, amount, comment):
         self.currency = currency
@@ -146,22 +149,30 @@ class FIFOQueue:
         return len(self.assets) == 0
 
     def pop(self, quantity):
-        if quantity > self.total_quantity + 0.05:  # accounting for some rounding errors
-            if not self.is_empty() and self.assets[0].__class__.__name__ == "FIFOShare":
-                symbol = self.assets[0].symbol
+        if math.isclose(quantity, 0, abs_tol=1e-10):
+            return []
+
+        if quantity < 0:
+            raise ValueError("Cannot sell negative amount of equity")
+
+        if quantity > 0 and self.is_empty():
+            raise ValueError(f"Cannot sell equities because there isn't any owned")
+
+        if not math.isclose(quantity, self.total_quantity) and quantity > self.total_quantity:
+            symbol = self.assets[0].symbol
+            asset_type = self.assets[0].__class__.__name__
+            if asset_type == "FIFOShare":
                 raise ValueError(
-                    f"Cannot sell more shares than owned overall. Symbol: {symbol}"
+                    f"Cannot sell more {symbol} shares ({quantity}) than owned overall ({self.total_quantity})."
+                )
+            elif asset_type == "FIFOForex":
+                raise ValueError(
+                    f"Cannot convert more {symbol} ({quantity}) than owned overall ({self.total_quantity})."
                 )
             else:
                 raise ValueError(
-                    "Cannot pop quantity larger than all quantities in FIFOQueue!"
+                    f"Cannot pop quantity ({quantity}) larger than all quantities ({self.total_quantity}) in FIFOQueue!"
                 )
-
-        if quantity < 0:
-            raise ValueError("Cannot pop negative quantity from FIFOQueue!")
-
-        if quantity == 0 or self.is_empty():
-            return []
 
         front_quantity = self.assets[0].quantity
         if quantity < front_quantity:
@@ -169,11 +180,9 @@ class FIFOQueue:
             self.assets[0].quantity -= quantity
             self.total_quantity -= quantity
             return [pop_asset]
-
         elif quantity == front_quantity:
             self.total_quantity -= quantity
             return [self.assets.pop(0)]
-
         else:
             # quantity is larger
             # pop first item, then call pop on remaining quantity
