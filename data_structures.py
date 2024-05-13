@@ -148,7 +148,7 @@ class FIFOQueue:
     def is_empty(self):
         return len(self.assets) == 0
 
-    def pop(self, quantity):
+    def pop(self, quantity, sell_date):
         if math.isclose(quantity, 0, abs_tol=1e-10):
             return []
 
@@ -174,6 +174,14 @@ class FIFOQueue:
                     f"Cannot pop quantity ({quantity}) larger than all quantities ({self.total_quantity}) in FIFOQueue!"
                 )
 
+        if self.assets[0].buy_date > sell_date:
+            # Relying on the fact that "assets" are sorted by date
+            symbol = self.assets[0].symbol
+            raise ValueError(
+                f"Cannot sell the requested {symbol} equity because on the sell transaction date "
+                f"({sell_date.strftime('%Y-%m-%d')}) the requested amount is not available"
+            )
+
         front_quantity = self.assets[0].quantity
         if quantity < front_quantity:
             pop_asset = from_asset(self.assets[0], quantity)
@@ -189,7 +197,7 @@ class FIFOQueue:
             pop_asset = self.assets.pop(0)
             self.total_quantity -= pop_asset.quantity
             remaining_quantity = quantity - pop_asset.quantity
-            return [pop_asset] + self.pop(remaining_quantity)
+            return [pop_asset] + self.pop(remaining_quantity, sell_date)
 
     def __repr__(self):
         return self.assets.__repr__()
