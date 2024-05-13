@@ -33,16 +33,21 @@ def get_reference_rates():
 
 
 def read_data(sub_dir, file_name):
-    # read list of deposits, sales, dividend payments and wire transfers
+    # read list of deposits, sales, dividend payments and currency conversions
     # sort them to ensure that they are in chronological order
     file_path = os.path.join(sub_dir, file_name)
     with pd.ExcelFile(file_path) as xls:
+        forex_sheet = "wire_transfers" if "wire_transfers" in xls.sheet_names else "currency conversion to EUR"
+        if forex_sheet == "wire_transfers":
+            print('"wire_transfers" as a sheet name is deprecated and discouraged; '
+                  'use "currency conversion to EUR" instead')
+
         df_deposits = pd.read_excel(xls, sheet_name="deposits", parse_dates=["date"]).sort_values("date")
         df_sales = pd.read_excel(xls, sheet_name="sales", parse_dates=["date"]).sort_values("date")
         df_dividends = pd.read_excel(xls, sheet_name="dividends", parse_dates=["date"]).sort_values("date")
-        df_wire_transfers = pd.read_excel(xls, sheet_name="wire_transfers", parse_dates=["date"]).sort_values("date")
+        df_forex_to_eur = pd.read_excel(xls, sheet_name=forex_sheet, parse_dates=["date"]).sort_values("date")
 
-    return df_deposits, df_sales, df_dividends, df_wire_transfers
+    return df_deposits, df_sales, df_dividends, df_forex_to_eur
 
 
 def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):

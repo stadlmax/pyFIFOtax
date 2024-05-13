@@ -3,7 +3,7 @@ Simple Tax Reporting Tool for share transactions on foreign exchanges
 
 # Data Sources
 A tax report is generated in an automated fashion based on two sources of inputs
-- a history of transactions including deposits and sales of shares, dividend payments, wire transfers, and all relevant fees in the process (see `example/transactions.xlsx` for details)
+- a history of transactions including deposits and sales of shares, dividend payments, currency conversions to EUR, and all relevant fees in the process (see `example/transactions.xlsx` for details)
 - a history of all relevant exchange rates (`eurofxref-hist.csv`, based on official reference rates from [EZB](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.de.html))
 
 For the history of transactions, you don't have to bother about converting to EUR or matching the sell prices to the buy prices for instance. This is part of the automated reporting. Simply list the raw data. 
