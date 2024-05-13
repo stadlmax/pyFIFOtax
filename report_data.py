@@ -45,7 +45,7 @@ class ReportData:
         self.df_deposits = None
         self.df_sales = None
         self.df_dividends = None
-        self.df_wire_transfers = None
+        self.df_forex_to_eur = None
         self.daily_rates = None
         self.monthly_rates = None
         # list of supported currencies - as in we have available exchange rate data
@@ -65,16 +65,16 @@ class ReportData:
             self.df_deposits,
             self.df_sales,
             self.df_dividends,
-            self.df_wire_transfers,
+            self.df_forex_to_eur,
         ) = read_data(self.sub_dir, self.file_name)
         currencies = self.df_deposits.currency.unique()
         symbols = self.df_deposits.symbol.unique()
 
-        extra_currencies = pd.concat([self.df_sales.currency, self.df_dividends.currency, self.df_wire_transfers.currency]).unique()
+        extra_currencies = pd.concat([self.df_sales.currency, self.df_dividends.currency, self.df_forex_to_eur.currency]).unique()
         extra_currencies = np.setdiff1d(extra_currencies, currencies).tolist()
         currencies = currencies.tolist()
         if len(extra_currencies) > 0:
-            raise ValueError("Sales, dividends, or wire transfers contain additional currencies which are not present in buy transactions. "
+            raise ValueError("Sales, dividends, or currency conversions contain additional currencies which are not present in buy transactions. "
                              "Most likely this indicates an error.\n"
                              f"Extra currencies: {extra_currencies}")
 
@@ -111,12 +111,12 @@ class ReportData:
         self.dividends = {s: [] for s in symbols}
 
     def process_fifo_data(self):
-        # process data in the sequence deposits - dividends - sales - wire_transfers
+        # process data in the sequence deposits - dividends - sales - currency conversion to EUR
         # this should ensure a valid FIFO sequence in both the shares and the foreign currencies
         self.process_deposits(self.df_deposits)
         self.process_dividends(self.df_dividends)
         self.process_sales(self.df_sales)
-        self.process_wire_transfers(self.df_wire_transfers)
+        self.process_forex_to_eur(self.df_forex_to_eur)
 
     def apply_exchange_rates(self):
         apply_rates_forex_dict(self.fees, self.daily_rates, self.monthly_rates)
@@ -229,7 +229,7 @@ class ReportData:
             self.sold_shares[sold_symbol].extend(tmp)
 
             # technically: the fees for selling shares are small enough to neglect them
-            # for completeness, we add them to "fees" which will mainly comprise fees for wire transfers
+            # for completeness, we add them to "fees" which will mainly comprise fees for wire transfers in the currency conversion to EUR sheet
             # technically: one should also separate those as these fees here might just might be used
             # to compute the "Kapitalertrag"
             self.add_fees(row, f"Selling {row.symbol}")
@@ -237,10 +237,10 @@ class ReportData:
             currency, new_forex = FIFOForex.from_share_sale(row)
             self.held_forex[row.currency].push(new_forex)
 
-    def process_wire_transfers(self, df_wire_transfers):
-        # When doing a wire transfer, you convert the USD you possess into the equivalent amount of EUR.
-        # This doesn't include the fee you pay for the transfer, that just vanishes
-        for row_idx, row in df_wire_transfers.iterrows():
+    def process_forex_to_eur(self, df_forex_to_eur):
+        # When doing a currency conversion, you convert the USD you possess into the equivalent amount of EUR.
+        # This doesn't include the fee you pay for the transfer, that just vanishes in the original denomination
+        for row_idx, row in df_forex_to_eur.iterrows():
             sold_currency = row.currency
             self.held_forex[sold_currency].pop(row.fees, row.date)  # remove fees
             tmp = self.held_forex[sold_currency].pop(row.net_amount, row.date)
@@ -249,4 +249,4 @@ class ReportData:
                 t.sell_price = 1  # currency unit
             self.sold_forex[sold_currency].extend(tmp)
 
-            self.add_fees(row, "Wire transfer")
+            self.add_fees(row, "Currency conversion or wire transfer")
