@@ -218,7 +218,7 @@ class ReportData:
             if sold_quantity < 0:
                 raise ValueError(f"In 'sales' tab, row number {row_idx + 2} for symbol '{sold_symbol}' the quantity is negative")
 
-            tmp = self.held_shares[sold_symbol].pop(sold_quantity)
+            tmp = self.held_shares[sold_symbol].pop(sold_quantity, row.date)
             for t in tmp:
                 t.sell_date = row.date
                 t.sell_price = row.sell_price
@@ -242,8 +242,8 @@ class ReportData:
         # This doesn't include the fee you pay for the transfer, that just vanishes
         for row_idx, row in df_wire_transfers.iterrows():
             sold_currency = row.currency
-            self.held_forex[sold_currency].pop(row.fees)  # remove fees
-            tmp = self.held_forex[sold_currency].pop(row.net_amount)
+            self.held_forex[sold_currency].pop(row.fees, row.date)  # remove fees
+            tmp = self.held_forex[sold_currency].pop(row.net_amount, row.date)
             for t in tmp:
                 t.sell_date = row.date
                 t.sell_price = 1  # currency unit
