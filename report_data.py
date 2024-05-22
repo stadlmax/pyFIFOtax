@@ -106,7 +106,7 @@ class ReportData:
         self.held_forex = {c: FIFOQueue() for c in currencies}
         self.sold_forex = {c: [] for c in currencies}
 
-        self.fees = {c: [] for c in currencies}
+        self.fees = {f: [] for f in symbols + currencies}
         self.taxes = {s: [] for s in symbols}
         self.dividends = {s: [] for s in symbols}
 
@@ -170,7 +170,7 @@ class ReportData:
             report_file_name,
         )
 
-    def add_fees(self, row, comment):
+    def add_fees(self, row: pd.Series, comment: str):
         if row.fees < 0:
             raise ValueError(f"On {row.date} the fee of {row.fees} {row.currency} is negative")
 
@@ -182,7 +182,8 @@ class ReportData:
                 comment=comment,
             )
 
-            self.fees[row.currency].append(new_fees)
+            symbol = row.symbol if "symbol" in row else row.currency
+            self.fees[symbol].append(new_fees)
 
     def process_deposits(self, df_deposits):
         # deposits of shares are simple, as df_deposits is assumed to be sorted

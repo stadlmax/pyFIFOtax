@@ -149,7 +149,7 @@ def write_report(
 
 
 def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
-    for k, v in forex_dict.items():
+    for _, v in forex_dict.items():
         for f in v:
             if f.currency == "EUR":
                 f.amount_eur_daily = f.amount
@@ -182,7 +182,7 @@ def filter_forex_dict(forex_dict, report_year):
             # filter based on date of fee / taxation /etc. event
             if f.date.year == report_year:
                 filtered_dict[k].append(f)
-    for k, v in filtered_dict.items():
+    for _, v in filtered_dict.items():
         v.sort(key=get_date)
     return filtered_dict
 
