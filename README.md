@@ -31,5 +31,13 @@ Since all the reporting is done in a very simple and quite naive Python implemen
 - pandas
 - XlsxWriter
 
+# Testing
+
+If you develop a new feature or change an existing piece of code, test your changes with the following command:
+
+```sh
+PYTHONPATH=. pytest
+```
+
 # Disclaimer
 I am neither a lawyer nor a tax advisor. This is no tax advice. For me, this is a helpful tool. Feel free to use it but note that you should know what you are doing, and you are responsible for reporting your taxes correctly.
