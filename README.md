@@ -24,6 +24,24 @@ For the reporting, you can choose conversion based on daily exchange rates (`-m 
 
 The generated report will contain several sheets with details of the transactions matching sell and buy orders based on the FIFO principle and including the right conversion rates to EUR. The last sheet will contain a summary intended as guidance for ELSTER.
 
+# Conversion from Interactive Brokers CSV output
+
+The following has to be done once on the IBKR web interface:
+
+1. Go to _Performance & Reports_ → _Statements_
+2. Create a new _Custom Statement_
+3. Specify "pyFIFOtax CSV export" as _Statement Name_
+4. In Sections select _All_
+5. In _Section Configurations_ set all to _No_
+6. Set _Format_ to _CSV_, _Period_ to _Daily_, and the language to _English_
+7. Save it
+
+Export the CSV file by running this newly created custom statement in the desired date range, then start the `ibkr_convert.py` script.
+
+Always thoroughly examine the result.
+
+By default, the "symbol" column contains the ticker name. If you'd like to see the ISIN there instead, use the `--ticker-to-isin` flag.
+
 # Further Use
 Since all the reporting is done in a very simple and quite naive Python implementation, one could easily use it to augment the data in other ways. `notebook_example.ipynb` for instance shows you how to retrieve certain results as `pd.DataFrame`.
 
