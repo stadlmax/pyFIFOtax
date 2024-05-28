@@ -24,7 +24,29 @@ For the reporting, you can choose conversion based on daily exchange rates (`-m 
 
 The generated report will contain several sheets with details of the transactions matching sell and buy orders based on the FIFO principle and including the right conversion rates to EUR. The last sheet will contain a summary intended as guidance for ELSTER.
 
-# Conversion from Interactive Brokers CSV output
+# Conversion from CSV export
+
+Various conversion utilities are available to convert the CSV output of the broker into a separate XLSX sheet.
+
+Always inspect the results manually and copy only those values into the final spreadsheet which are verified.
+
+Parameters:
+
+```
+positional arguments:
+  {ibkr,schwab}         Type of the CSV format for input
+
+options:
+  -h, --help            show this help message and exit
+  -i CSV_FILENAME, --csv CSV_FILENAME
+                        CSV file from Interactive Brokers or Schwab
+  -o XLSX_FILENAME, --xlsx XLSX_FILENAME
+                        Output XLSX file
+  --ticker-to-isin, --no-ticker-to-isin
+                        Replace tickers in the 'symbol' column to ISIN (only for IBKR)
+```
+
+## Interactive Brokers
 
 The following has to be done once on the IBKR web interface:
 
@@ -36,11 +58,28 @@ The following has to be done once on the IBKR web interface:
 6. Set _Format_ to _CSV_, _Period_ to _Daily_, and the language to _English_
 7. Save it
 
-Export the CSV file by running this newly created custom statement in the desired date range, then start the `ibkr_convert.py` script.
+Export the CSV file by running this newly created custom statement in the desired date range, then start the `converter.py` script with argument `ibkr`.
 
 Always thoroughly examine the result.
 
 By default, the "symbol" column contains the ticker name. If you'd like to see the ISIN there instead, use the `--ticker-to-isin` flag.
+
+Note the following limitations:
+
+* IBKR export format is very extensive, it's possible that some rows are not processed. Always verify the results
+* Tax withholding calculation is not supported for dividends. Withheld tax will always be zero.
+
+## Schwab
+
+Export the CSV in the desired date range from History > Transactions > Export.
+
+Start the `converter.py` script with argument `schwab`.
+
+Note the following limitations:
+
+* Schwab CSV converter was not tested with a fully upgraded account
+* The converter was not tested with more than one dividend and tax withholding row
+* Currency conversions (if Schwab does it at all) are not supported
 
 # Further Use
 Since all the reporting is done in a very simple and quite naive Python implementation, one could easily use it to augment the data in other ways. `notebook_example.ipynb` for instance shows you how to retrieve certain results as `pd.DataFrame`.
