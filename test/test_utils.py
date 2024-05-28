@@ -10,7 +10,6 @@ def get_elster_summary(file_name, year, mode, apply_stock_splits=False):
     report = ReportData(
         sub_dir="test/files",
         file_name=file_name,
-        stock_split_file_path="test/files/stock_splits.csv",
         apply_stock_splits=apply_stock_splits,
     )
 

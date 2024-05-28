@@ -1,4 +1,4 @@
-import decimal
+import os
 import numpy as np
 import pandas as pd
 from collections import defaultdict
@@ -15,15 +15,11 @@ class ReportData:
         self,
         sub_dir: str,
         file_name: str,
-        stock_split_file_path: str = None,
         apply_stock_splits: bool = True,
     ):
         self.apply_stock_splits = apply_stock_splits
 
-        if stock_split_file_path is None:
-            self.stock_split_file_name = "stock_splits.csv"
-        else:
-            self.stock_split_file_name = stock_split_file_path
+        self.stock_split_file_path = os.path.join(sub_dir, "stock_splits.csv")
 
         # sub_dir and file_name for the raw data
         self.sub_dir = sub_dir
@@ -78,7 +74,7 @@ class ReportData:
     def read_raw_data(self):
         if self.apply_stock_splits:
             df_stock_splits = pd.read_csv(
-                self.stock_split_file_name, parse_dates=["date"]
+                self.stock_split_file_path, parse_dates=["date"]
             )
             df_stock_splits = df_stock_splits.sort_values(by="date", ascending=True)
 
