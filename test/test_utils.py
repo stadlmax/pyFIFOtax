@@ -42,9 +42,16 @@ def test_summarize_forex_simple():
     assert_allclose(summary, [0, 0, 0, 0, 19, 0])
 
 
+def test_summarize_forex_next_exchange_date():
+    # Earliest imported exchange date: 2009-01-02
+    summary = get_elster_summary("forex_next_exchange_date.xlsx", 2022, "daily")
+    assert_allclose(summary, [0, 0, 0, 0, 0, 0])
+
+
 exception_outputs = [
     ("forex_not_enough_currency_in_the_end.xlsx", r"Cannot convert more USD \(5000\) than owned overall.+"),
     ("forex_not_enough_currency_inbetween.xlsx", r"Cannot sell the requested USD equity.+amount is not available"),
+    ("forex_nonexistent_exchange_date.xlsx", r".+exchange rate cannot be found.+or for the following seven days"),
 ]
 
 

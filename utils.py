@@ -1,5 +1,5 @@
 import os
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import pandas as pd
 
@@ -148,6 +148,22 @@ def write_report(
         create_report_sheet("ELSTER - Summary", df_summary, writer)
 
 
+def get_daily_rate(daily_rates: pd.DataFrame, date: datetime, currency: str):
+    if date in daily_rates[currency]:
+        return daily_rates[currency][date]
+    else:
+        # On currency settlement holidays exchanges don't operate. Go ahead and find the next valid settlement date
+        for day_increase in range(1, 8):
+            day = date + timedelta(days=day_increase)
+
+            if day in daily_rates[currency]:
+                return daily_rates[currency][day]
+
+    raise ValueError(
+        f"{currency} currency exchange rate cannot be found for {date.date()} or for the following seven days"
+    )
+
+
 def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
     for _, v in forex_dict.items():
         for f in v:
@@ -156,20 +172,9 @@ def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
                 f.amount_eur_monthly = f.amount
             else:
                 # exchange rates are in 1 EUR : X FOREX
-                day = f.date
-                if f.date not in daily_rates[f.currency]:
-                    # On weekends the currency exchange doesn't operate. Go back some days in time to find a valid value
-                    for day_reduce in range(1, 7):
-                        day = f.date - timedelta(days=day_reduce)
-                        if day in daily_rates[f.currency]:
-                            break
-                        else:
-                            raise ValueError(
-                                f"{f.currency} currency exchange rate cannot be found for {f.date} or "
-                                "the preceding seven days"
-                            )
+                daily_rate = get_daily_rate(daily_rates, f.date, f.currency)
+                f.amount_eur_daily = f.amount / daily_rate
 
-                f.amount_eur_daily = f.amount / daily_rates[f.currency][day]
                 f.amount_eur_monthly = (
                     f.amount / monthly_rates[f.currency][f.date.year, f.date.month]
                 )
@@ -228,11 +233,11 @@ def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
             else:
                 # exchange rates are in 1 EUR : X FOREX
 
-                buy_rate_daily = daily_rates[f.currency][f.buy_date]
+                buy_rate_daily = get_daily_rate(daily_rates, f.buy_date, f.currency)
                 buy_rate_monthly = monthly_rates[f.currency][
                     f.buy_date.year, f.buy_date.month
                 ]
-                sell_rate_daily = daily_rates[f.currency][f.sell_date]
+                sell_rate_daily = get_daily_rate(daily_rates, f.sell_date, f.currency)
                 sell_rate_monthly = monthly_rates[f.currency][
                     f.sell_date.year, f.sell_date.month
                 ]

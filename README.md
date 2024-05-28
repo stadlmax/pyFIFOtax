@@ -71,7 +71,7 @@ Note the following limitations:
 
 ## Schwab
 
-Export the CSV in the desired date range from History > Transactions > Export.
+Export the CSV in the desired date range from _History_ > _Transactions_ > _Export_. Don't forget to click on "Search" after setting the time range.
 
 Start the `converter.py` script with argument `schwab`.
 
