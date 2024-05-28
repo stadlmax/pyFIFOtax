@@ -1,6 +1,9 @@
 # class for representing a foreign currency to cover dividend payments, fees, quellensteuer, etc.
 # these are separated from FIFO treatments of foreign currencies
 import math
+import decimal
+
+from utils import to_decimal, round_decimal
 
 
 class Forex:
@@ -16,8 +19,8 @@ class Forex:
 
     @staticmethod
     def from_dividends_row(row):
-        gross_amount = row.amount
-        tax_amount = row.tax_withholding
+        gross_amount = to_decimal(row.amount)
+        tax_amount = to_decimal(row.tax_withholding)
         net_amount = gross_amount - tax_amount
         assert 0 <= tax_amount <= gross_amount, "Expected non-negative Tax Withholding!"
         assert 0 <= net_amount <= gross_amount, "Expected non-negative Net Amount"
@@ -39,6 +42,22 @@ class Forex:
         return f"{self.currency}(Date: {self.date}, Amount: {self.amount:.2f})"
 
 
+class StockSplit:
+    def __init__(self, symbol, date, shares_after_split):
+        self.symbol = symbol
+        self.date = date
+        # for each 1 existing shares, you receive shares_after_slit
+        # in case e.g. a split was 3:2, this corresponds to 1.5
+        # reverse splits would be ratios < 1.0
+        self.shares_after_split = shares_after_split
+
+    @staticmethod
+    def from_split_csv_row(row):
+        return StockSplit(
+            symbol=row.symbol, date=row.date, shares_after_split=row.shares_after_split
+        )
+
+
 # base class representing an arbitrary asset subject to FIFO treatment
 class FIFOObject:
     def __init__(self, symbol, quantity, buy_date, buy_price, currency):
@@ -56,9 +75,8 @@ class FIFOObject:
         self.gain_eur_daily = None
         self.gain_eur_monthly = None
 
-        # class representing a FOREX object subject to FIFO treatment
 
-
+# class representing a FOREX object subject to FIFO treatment
 class FIFOForex(FIFOObject):
     def __init__(self, currency, quantity, buy_date, source):
         # "money" is always a single unit "money"
@@ -67,8 +85,8 @@ class FIFOForex(FIFOObject):
 
     @staticmethod
     def from_dividends_row(row):
-        gross_quantity = row.amount
-        tax_quantity = row.tax_withholding
+        gross_quantity = to_decimal(row.amount)
+        tax_quantity = to_decimal(row.tax_withholding)
         net_quantity = gross_quantity - tax_quantity
         assert gross_quantity > 0, "Expected positive Gross Quantity!"
         assert (
@@ -87,7 +105,15 @@ class FIFOForex(FIFOObject):
 
     @staticmethod
     def from_share_sale(row):
-        net_proceeds = row.sell_price * row.quantity - row.fees
+        sell_price = to_decimal(row.sell_price)
+        quantity = to_decimal(row.quantity)
+        fees = to_decimal(row.fees)
+        # schwab sometimes has sub-cent share prices
+        # e.g. 100.7438, the deposited value, however,
+        # is rounded to full cents
+        # TODO: check if rounding mode matches schwab
+        net_proceeds = sell_price * quantity - fees
+        net_proceeds = round_decimal(net_proceeds)
         assert (
             net_proceeds >= 0
         ), "Expected non-negative net proceeds from sale of shares!"
@@ -116,9 +142,9 @@ class FIFOShare(FIFOObject):
         # if quantity > 0, all assets share the same, i.e. just duplicate them
         new_asset = FIFOShare(
             symbol=row.symbol,
-            quantity=row.net_quantity,
+            quantity=to_decimal(row.net_quantity),
             buy_date=row.date,
-            buy_price=row.fmv_or_buy_price,
+            buy_price=to_decimal(row.fmv_or_buy_price),
             currency=row.currency,
         )
         return row.symbol, new_asset
@@ -130,7 +156,15 @@ class FIFOShare(FIFOObject):
 class FIFOQueue:
     def __init__(self):
         self.assets = []
-        self.total_quantity = 0
+        self.total_quantity = to_decimal(0)
+
+    def apply_split(self, split):
+        self.total_quantity = to_decimal(0)
+        for asset in self.assets:
+            if asset.buy_date <= split.date:
+                asset.quantity = asset.quantity * to_decimal(split.shares_after_split)
+                asset.buy_price = asset.buy_price / to_decimal(split.shares_after_split)
+            self.total_quantity = self.total_quantity + asset.quantity
 
     def push(self, asset):
         if self.is_empty():
@@ -148,6 +182,9 @@ class FIFOQueue:
     def is_empty(self):
         return len(self.assets) == 0
 
+    def peek(self):
+        return self.assets[0]
+
     def pop(self, quantity, sell_date):
         if math.isclose(quantity, 0, abs_tol=1e-10):
             return []
@@ -158,7 +195,10 @@ class FIFOQueue:
         if quantity > 0 and self.is_empty():
             raise ValueError(f"Cannot sell equities because there isn't any owned")
 
-        if not math.isclose(quantity, self.total_quantity) and quantity > self.total_quantity:
+        if (
+            not math.isclose(quantity, self.total_quantity)
+            and quantity > self.total_quantity
+        ):
             symbol = self.assets[0].symbol
             asset_type = self.assets[0].__class__.__name__
             if asset_type == "FIFOShare":
@@ -188,8 +228,8 @@ class FIFOQueue:
             self.assets[0].quantity -= quantity
             self.total_quantity -= quantity
             return [pop_asset]
-        elif quantity == front_quantity:
-            self.total_quantity -= quantity
+        elif math.isclose(quantity, front_quantity):
+            self.total_quantity -= front_quantity
             return [self.assets.pop(0)]
         else:
             # quantity is larger

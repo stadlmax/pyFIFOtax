@@ -1,4 +1,6 @@
 import os
+import warnings
+import decimal
 from datetime import timedelta
 
 import pandas as pd
@@ -6,6 +8,17 @@ import pandas as pd
 
 def get_date(forex):
     return forex.date
+
+
+def round_decimal(number, precision: str = "0.01"):
+    return number.quantize(
+        decimal.Decimal(precision),
+        rounding=decimal.ROUND_HALF_UP,
+    )
+
+
+def to_decimal(number):
+    return decimal.Decimal(number)
 
 
 def get_reference_rates():
@@ -37,15 +50,29 @@ def read_data(sub_dir, file_name):
     # sort them to ensure that they are in chronological order
     file_path = os.path.join(sub_dir, file_name)
     with pd.ExcelFile(file_path) as xls:
-        forex_sheet = "wire_transfers" if "wire_transfers" in xls.sheet_names else "currency conversion to EUR"
+        forex_sheet = (
+            "wire_transfers"
+            if "wire_transfers" in xls.sheet_names
+            else "currency conversion to EUR"
+        )
         if forex_sheet == "wire_transfers":
-            print('"wire_transfers" as a sheet name is deprecated and discouraged; '
-                  'use "currency conversion to EUR" instead')
+            warnings.warn(
+                '"wire_transfers" as a sheet name is deprecated and discouraged; '
+                'use "currency conversion to EUR" instead'
+            )
 
-        df_deposits = pd.read_excel(xls, sheet_name="deposits", parse_dates=["date"]).sort_values("date")
-        df_sales = pd.read_excel(xls, sheet_name="sales", parse_dates=["date"]).sort_values("date")
-        df_dividends = pd.read_excel(xls, sheet_name="dividends", parse_dates=["date"]).sort_values("date")
-        df_forex_to_eur = pd.read_excel(xls, sheet_name=forex_sheet, parse_dates=["date"]).sort_values("date")
+        df_deposits = pd.read_excel(
+            xls, sheet_name="deposits", parse_dates=["date"]
+        ).sort_values("date")
+        df_sales = pd.read_excel(
+            xls, sheet_name="sales", parse_dates=["date"]
+        ).sort_values("date")
+        df_dividends = pd.read_excel(
+            xls, sheet_name="dividends", parse_dates=["date"]
+        ).sort_values("date")
+        df_forex_to_eur = pd.read_excel(
+            xls, sheet_name=forex_sheet, parse_dates=["date"]
+        ).sort_values("date")
 
     return df_deposits, df_sales, df_dividends, df_forex_to_eur
 
@@ -55,14 +82,31 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     # for tax reasons, we usually also want the sum of gains
     # and the sum of losses
     share_gain_series = df_shares["Gain [EUR]"]
-    share_losses = share_gain_series[share_gain_series < 0].sum()
-    share_gains = share_gain_series[share_gain_series > 0].sum()
+    if share_gain_series[share_gain_series < 0].shape[0] > 0:
+        share_losses = share_gain_series[share_gain_series < 0].sum()
+    else:
+        share_losses = to_decimal(0)
+    if share_gain_series[share_gain_series > 0].shape[0] > 0:
+        share_gains = share_gain_series[share_gain_series > 0].sum()
+    else:
+        share_gains = to_decimal(0)
 
     forex_gain_series = df_forex["Gain [EUR]"]
 
-    total_dividends = df_dividends["Amount [EUR]"].sum()
-    total_fees = df_fees["Amount [EUR]"].sum()
-    total_taxes = df_taxes["Amount [EUR]"].sum()
+    if df_dividends.shape[0] > 0:
+        total_dividends = df_dividends["Amount [EUR]"].sum()
+    else:
+        total_dividends = to_decimal(0)
+
+    if df_fees.shape[0] > 0:
+        total_fees = df_fees["Amount [EUR]"].sum()
+    else:
+        total_fees = to_decimal(0)
+
+    if df_taxes.shape[0] > 0:
+        total_taxes = df_taxes["Amount [EUR]"].sum()
+    else:
+        total_taxes = to_decimal(0)
 
     # unlike a previous version, we have to split things here
     # losses from share can only be compared to gains from shares
@@ -72,38 +116,41 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     total_foreign_gains = share_losses + share_gains + total_dividends
     gains_from_shares = share_gains
     losses_from_shares = -share_losses
-    total_gain_forex = forex_gain_series.sum()
+    if forex_gain_series.shape[0] > 0:
+        total_gain_forex = forex_gain_series.sum()
+    else:
+        total_gain_forex = to_decimal(0)
 
     anlagen = [
         (
             "Anlage KAP",
             "Zeile 19: Ausländische Kapitalerträge (ohne Betrag lt. Zeile 47)",
-            round(total_foreign_gains, 2),
+            round_decimal(total_foreign_gains),
         ),
         (
             "Anlage KAP",
             "Zeile 20: In den Zeilen 18 und 19 enthaltene Gewinne aus Aktienveräußerungen i. S. d. § 20 Abs. 2 Satz 1 Nr 1 EStG",
-            round(gains_from_shares, 2),
+            round_decimal(gains_from_shares),
         ),
         (
             "Anlage KAP",
             "Zeile 23: In den Zeilen 18 und 19 enthaltene Verluste aus der Veräuerung von Aktien i. S. d. § 20 Abs. 2 Satz 1 Nr. 1 EStG",
-            round(losses_from_shares, 2),
+            round_decimal(losses_from_shares),
         ),
         (
             "Anlage KAP",
             "Zeile 41: Anrechenbare noch nicht angerechnete ausländische Steuern",
-            round(total_taxes, 2),
+            round_decimal(total_taxes),
         ),
         (
             "Anlage N",
             "Zeile 48: (Werbungskosten Sonstiges): Überweisungsgebühren auf deutsches Konto für Gehaltsbestandteil RSU/ESPP",
-            round(total_fees, 2),
+            round_decimal(total_fees),
         ),
         (
             "Anlage SO",
             "Zeilen 42 - 48: Gewinn / Verlust aus Verkauf von Fremdwährungen",
-            round(total_gain_forex, 2),  # here: the sum should be fine
+            round_decimal(total_gain_forex),  # here: the sum should be fine
         ),
     ]
     summary = {
@@ -169,9 +216,9 @@ def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
                                 "the preceding seven days"
                             )
 
-                f.amount_eur_daily = f.amount / daily_rates[f.currency][day]
-                f.amount_eur_monthly = (
-                    f.amount / monthly_rates[f.currency][f.date.year, f.date.month]
+                f.amount_eur_daily = f.amount / to_decimal(daily_rates[f.currency][day])
+                f.amount_eur_monthly = f.amount / to_decimal(
+                    monthly_rates[f.currency][f.date.year, f.date.month]
                 )
 
 
@@ -205,9 +252,9 @@ def forex_dict_to_df(forex_dict, mode):
             amount = f"{f.amount:.2f} {f.currency}"
             tmp["Amount"].append(amount)
             if mode == "daily":
-                tmp["Amount [EUR]"].append(round(f.amount_eur_daily, 2))
+                tmp["Amount [EUR]"].append(round_decimal(f.amount_eur_daily))
             else:
-                tmp["Amount [EUR]"].append(round(f.amount_eur_monthly, 2))
+                tmp["Amount [EUR]"].append(round_decimal(f.amount_eur_monthly))
 
     df = pd.DataFrame(
         tmp, columns=["Symbol", "Comment", "Date", "Amount", "Amount [EUR]"]
@@ -218,24 +265,23 @@ def forex_dict_to_df(forex_dict, mode):
 def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
     for k, v in trans_dict.items():
         for f in v:
-            buy_price, sell_price = f.buy_price, f.sell_price
+            buy_price, sell_price = to_decimal(f.buy_price), to_decimal(f.sell_price)
 
             if f.currency == "EUR":
-                buy_rate_daily = 1
-                buy_rate_monthly = 1
-                sell_rate_daily = 1
-                sell_rate_monthly = 1
+                buy_rate_daily = to_decimal(1)
+                buy_rate_monthly = to_decimal(1)
+                sell_rate_daily = to_decimal(1)
+                sell_rate_monthly = to_decimal(1)
             else:
                 # exchange rates are in 1 EUR : X FOREX
-
-                buy_rate_daily = daily_rates[f.currency][f.buy_date]
-                buy_rate_monthly = monthly_rates[f.currency][
-                    f.buy_date.year, f.buy_date.month
-                ]
-                sell_rate_daily = daily_rates[f.currency][f.sell_date]
-                sell_rate_monthly = monthly_rates[f.currency][
-                    f.sell_date.year, f.sell_date.month
-                ]
+                buy_rate_daily = to_decimal(daily_rates[f.currency][f.buy_date])
+                buy_rate_monthly = to_decimal(
+                    monthly_rates[f.currency][f.buy_date.year, f.buy_date.month]
+                )
+                sell_rate_daily = to_decimal(daily_rates[f.currency][f.sell_date])
+                sell_rate_monthly = to_decimal(
+                    monthly_rates[f.currency][f.sell_date.year, f.sell_date.month]
+                )
 
             f.buy_price_eur_daily = buy_price / buy_rate_daily
             f.buy_price_eur_monthly = buy_price / buy_rate_monthly
@@ -249,15 +295,13 @@ def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
             )
 
 
-def filter_transact_dict(
-    trans_dict, report_year, min_quantity, speculative_period=None
-):
+def filter_transact_dict(trans_dict, report_year, speculative_period=None):
     filtered_dict = {k: [] for k in trans_dict.keys()}
     for k, v in trans_dict.items():
         for f in v:
             # filter based on sell date and quantity is larger min_quantity
             # (the latter is to filter out Forex transactions due to rounding errors)
-            if (f.sell_date.year == report_year) and (f.quantity > min_quantity):
+            if f.sell_date.year == report_year:
                 if speculative_period is None:
                     filtered_dict[k].append(f)
                 elif (f.sell_date - f.buy_date).days < speculative_period * 365:
@@ -284,9 +328,10 @@ def transact_dict_to_df(transact_dict, mode):
         for f in v:
             tmp["Symbol"].append(k)
             if f.__class__.__name__ == "FIFOShare":
-                tmp["Quantity"].append(int(f.quantity))
+                tmp["Quantity"].append(round_decimal(f.quantity))
             else:
-                tmp["Quantity"].append(round(f.quantity, 2))
+                tmp["Quantity"].append(round_decimal(f.quantity))
+
             buy_date = f"{f.buy_date.year}-{f.buy_date.month:02}-{f.buy_date.day:02}"
             sell_date = (
                 f"{f.sell_date.year}-{f.sell_date.month:02}-{f.sell_date.day:02}"
@@ -296,13 +341,13 @@ def transact_dict_to_df(transact_dict, mode):
             tmp["Buy Price"].append(f"{f.buy_price:.2f} {f.currency}")
             tmp["Sell Price"].append(f"{f.sell_price:.2f} {f.currency}")
             if mode.lower() == "daily":
-                tmp["Buy Price [EUR]"].append(round(f.buy_price_eur_daily, 2))
-                tmp["Sell Price [EUR]"].append(round(f.sell_price_eur_daily, 2))
-                tmp["Gain [EUR]"].append(round(f.gain_eur_daily, 2))
+                tmp["Buy Price [EUR]"].append(round_decimal(f.buy_price_eur_daily))
+                tmp["Sell Price [EUR]"].append(round_decimal(f.sell_price_eur_daily))
+                tmp["Gain [EUR]"].append(round_decimal(f.gain_eur_daily))
             else:
-                tmp["Buy Price [EUR]"].append(round(f.buy_price_eur_monthly, 2))
-                tmp["Sell Price [EUR]"].append(round(f.sell_price_eur_monthly, 2))
-                tmp["Gain [EUR]"].append(round(f.gain_eur_monthly, 2))
+                tmp["Buy Price [EUR]"].append(round_decimal(f.buy_price_eur_monthly))
+                tmp["Sell Price [EUR]"].append(round_decimal(f.sell_price_eur_monthly))
+                tmp["Gain [EUR]"].append(round_decimal(f.gain_eur_monthly))
 
     df = pd.DataFrame(
         tmp,

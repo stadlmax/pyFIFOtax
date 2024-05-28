@@ -1,15 +1,22 @@
 import pytest
+import numpy as np
 from numpy.testing import assert_allclose
 
 from report_data import ReportData
 from utils import summarize_report
 
 
-def get_elster_summary(file_name, year, mode):
-    report = ReportData(sub_dir="test/files", file_name=file_name)
+def get_elster_summary(file_name, year, mode, apply_stock_splits=False):
+    report = ReportData(
+        sub_dir="test/files",
+        file_name=file_name,
+        stock_split_file_path="test/files/stock_splits.csv",
+        apply_stock_splits=apply_stock_splits,
+    )
+
     dfs = report.consolidate_report(year, mode)
     summary = summarize_report(*dfs)
-    return summary[summary.columns[2]].values
+    return summary[summary.columns[2]].values.astype(np.float64)
 
 
 order_file_names = [
@@ -31,9 +38,23 @@ example_outputs = [
 ]
 
 
+example_stock_split_outputs = [
+    ("daily", [6728.57, 6691.20, 149.03, 27.96, 35.04, 67.67]),
+    ("monthly_avg", [6650.94, 6640.13, 179.86, 28.6, 34.63, 16.86]),
+]
+
+
 @pytest.mark.parametrize("mode, desired", example_outputs)
 def test_summarize_report_example(mode, desired: list):
     summary = get_elster_summary("example.xlsx", 2022, mode)
+    assert_allclose(summary, desired)
+
+
+@pytest.mark.parametrize("mode, desired", example_stock_split_outputs)
+def test_summarize_report_example_stock_splits(mode, desired: list):
+    summary = get_elster_summary(
+        "example_stock_splits.xlsx", 2022, mode, apply_stock_splits=True
+    )
     assert_allclose(summary, desired)
 
 
@@ -43,8 +64,14 @@ def test_summarize_forex_simple():
 
 
 exception_outputs = [
-    ("forex_not_enough_currency_in_the_end.xlsx", r"Cannot convert more USD \(5000\) than owned overall.+"),
-    ("forex_not_enough_currency_inbetween.xlsx", r"Cannot sell the requested USD equity.+amount is not available"),
+    (
+        "forex_not_enough_currency_in_the_end.xlsx",
+        r"Cannot convert more USD \(5000\) than owned overall.+",
+    ),
+    (
+        "forex_not_enough_currency_inbetween.xlsx",
+        r"Cannot sell the requested USD equity.+amount is not available",
+    ),
 ]
 
 
