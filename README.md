@@ -86,6 +86,7 @@ Since all the reporting is done in a very simple and quite naive Python implemen
 
 # Requirements
 - pandas
+- openpyxl
 - XlsxWriter
 - babel
 - python>3.9
