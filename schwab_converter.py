@@ -4,6 +4,14 @@ from types import SimpleNamespace
 from converter import Converter
 
 
+def _create_mapping(list1, list2):
+    mapping = {}
+    for index, item in enumerate(list1):
+        if item in list2:
+            mapping[index] = list2.index(item)
+    return mapping
+
+
 class SchwabConverter(Converter):
     def __init__(self, args):
         super().__init__(args)
@@ -45,20 +53,22 @@ class SchwabConverter(Converter):
                             "FairMarketValuePrice", "SalePrice", "SharesSoldWithheldForTaxes", "NetSharesDeposited",
                             "Taxes", "GrossProceeds"]
 
-        if self.row != expected_headers:
-            raise ValueError("Schwab CSV is not in the expected format. Either this script needs adaption or "
-                             "a wrong type of CSV was downloaded.")
-
+        if set(self.row) < set(expected_headers):
+            raise ValueError(f"Schwab CSV is missing some columns: {set(expected_headers) - set(self.row)}")
+        
+        # CSV export might map to different headers
+        self.mapping = _create_mapping(expected_headers, self.row)
+        
         self.header_checked = True
 
     def _process_trade_row(self):
-        if self.row[1] in ["Deposit", "Sale"]:
-            date = datetime.strptime(self.row[0], "%m/%d/%Y").date()  # Date
-            symbol = self.row[2]  # Symbol
-            commission = self._parse_usd('0' if not self.row[5] else self.row[5])  # FeesAndCommissions
-            quantity = self._parse_number(self.row[4])  # Quantity
+        if self.row[self.mapping[1]] in ["Deposit", "Sale"]:
+            date = datetime.strptime(self.row[self.mapping[0]], "%m/%d/%Y").date()  # Date
+            symbol = self.row[self.mapping[2]]  # Symbol
+            commission = self._parse_usd('0' if not self.row[self.mapping[5]] else self.row[self.mapping[5]])  # FeesAndCommissions
+            quantity = self._parse_number(self.row[self.mapping[4]])  # Quantity
 
-            self.trade_in_progress.type = [self.row[1], self.row[3]]
+            self.trade_in_progress.type = [self.row[self.mapping[1]], self.row[self.mapping[3]]]
             self.trade_in_progress.row = [
                 date,
                 symbol,
@@ -77,17 +87,17 @@ class SchwabConverter(Converter):
             if self.trade_in_progress.type[0] == "Deposit":
                 df = self.df_deposits
                 if self.trade_in_progress.type[1] == "RS":  # RSU and ESPP FMV columns are different
-                    transaction_price = self._parse_usd(self.row[17])
+                    transaction_price = self._parse_usd(self.row[self.mapping[17]])
                 else:
-                    transaction_price = self._parse_usd(self.row[12])
+                    transaction_price = self._parse_usd(self.row[self.mapping[12]])
             else:
                 df = self.df_sales
-                transaction_price = self._parse_usd(self.row[22])  # SalePrice
-                quantity = self._parse_number(self.row[9])
-                self.trade_in_progress.row[2] = quantity  # Itemised share quantity
-                self.trade_in_progress.row[4] = quantity * self.trade_in_progress.commission_per_share  # Commission
+                transaction_price = self._parse_usd(self.row[self.mapping[22]])  # SalePrice
+                quantity = self._parse_number(self.row[self.mapping[9]])
+                self.trade_in_progress.row[self.mapping[2]] = quantity  # Itemised share quantity
+                self.trade_in_progress.row[self.mapping[4]] = quantity * self.trade_in_progress.commission_per_share  # Commission
 
-            self.trade_in_progress.row[3] = transaction_price
+            self.trade_in_progress.row[self.mapping[3]] = transaction_price
             df.loc[len(df.index)] = self.trade_in_progress.row
 
             return True
@@ -96,7 +106,7 @@ class SchwabConverter(Converter):
         pass
 
     def _process_dividends(self):
-        if self.row[1] not in ["Dividend", "Tax Withholding"]:
+        if self.row[self.mapping[1]] not in ["Dividend", "Tax Withholding"]:
             self.dividend_in_progress.row = []
             self.dividend_in_progress.withholding = 0.0
             return
@@ -105,21 +115,21 @@ class SchwabConverter(Converter):
             self.processed_dividends += 1
 
     def _process_dividend_row(self):
-        if self.row[1] == "Dividend":
+        if self.row[self.mapping[1]] == "Dividend":
             self.dividend_in_progress.row = [
-                datetime.strptime(self.row[0], "%m/%d/%Y").date(),  # Date
-                self.row[2],  # Symbol
-                self._parse_usd(self.row[7]),  # Amount
+                datetime.strptime(self.row[self.mapping[0]], "%m/%d/%Y").date(),  # Date
+                self.row[self.mapping[2]],  # Symbol
+                self._parse_usd(self.row[self.mapping[7]]),  # Amount
                 None,
                 'USD',
-                self.row[2],  # Symbol
+                self.row[self.mapping[2]],  # Symbol
             ]
         else:
-            self.dividend_in_progress.withholding = abs(self._parse_usd(self.row[7]))  # Amount
+            self.dividend_in_progress.withholding = abs(self._parse_usd(self.row[self.mapping[7]]))  # Amount
 
         # It's unpredictable whether "Dividend" or "Tax Withholding" comes first in the CSV
         if self.dividend_in_progress.row and self.dividend_in_progress.withholding > 0:
-            self.dividend_in_progress.row[3] = self.dividend_in_progress.withholding
+            self.dividend_in_progress.row[self.mapping[3]] = self.dividend_in_progress.withholding
             self.df_dividends.loc[len(self.df_dividends.index)] = self.dividend_in_progress.row
 
             return True
