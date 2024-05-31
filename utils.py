@@ -1,6 +1,11 @@
 import os
-import warnings
+import io
+import datetime
+import requests
+import zipfile
 import decimal
+from urllib.parse import urlparse
+from dataclasses import dataclass
 from datetime import timedelta
 
 import pandas as pd
@@ -22,11 +27,27 @@ def to_decimal(number):
 
 
 def get_reference_rates():
-    daily_ex_rates = pd.read_csv("eurofxref-hist.csv")
+    # check whether to download more recent exchange-rate data
+    mod_date = None
+    today = datetime.date.today()
+    if os.path.exists("eurofxref-hist.csv"):
+        mod_time = os.path.getmtime("eurofxref-hist.csv")
+        mod_date = datetime.datetime.fromtimestamp(mod_time).date()
+
+    if mod_date != today:
+        print("Downloading more recent exchange rate data ...")
+        response = requests.get(
+            "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.zip?69474b1034fa15ae36103fbf3554d272"
+        )
+        zip_file = zipfile.ZipFile(io.BytesIO(response.content))
+        zip_file.extractall(".")
+
+    daily_ex_rates = pd.read_csv("eurofxref-hist.csv", parse_dates=["Date"])
     daily_ex_rates = daily_ex_rates.loc[
         :, ~daily_ex_rates.columns.str.contains("^Unnamed")
     ]
-    daily_ex_rates.index = pd.to_datetime(daily_ex_rates["Date"], format="%Y-%m-%d")
+
+    daily_ex_rates.index = daily_ex_rates["Date"]
     # drop years earlier as 2009 as this would make reporting tax earning
     # way more complicated anyway
     daily_ex_rates = daily_ex_rates.loc[daily_ex_rates.index.year >= 2009]
@@ -45,7 +66,17 @@ def get_reference_rates():
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
 
-def read_data(sub_dir, file_name):
+@dataclass
+class RawData:
+    deposits: pd.DataFrame
+    dividends: pd.DataFrame
+    buy_orders: pd.DataFrame
+    sell_orders: pd.DataFrame
+    currency_conversions: pd.DataFrame
+    stock_splits: pd.DataFrame
+
+
+def read_data_legacy(sub_dir, file_name):
     # read list of deposits, sales, dividend payments and currency conversions
     # sort them to ensure that they are in chronological order
     file_path = os.path.join(sub_dir, file_name)
@@ -56,25 +87,89 @@ def read_data(sub_dir, file_name):
             else "currency conversion to EUR"
         )
         if forex_sheet == "wire_transfers":
-            warnings.warn(
+            print(
                 '"wire_transfers" as a sheet name is deprecated and discouraged; '
                 'use "currency conversion to EUR" instead'
             )
 
-        df_deposits = pd.read_excel(
-            xls, sheet_name="deposits", parse_dates=["date"]
-        ).sort_values("date")
-        df_sales = pd.read_excel(
-            xls, sheet_name="sales", parse_dates=["date"]
-        ).sort_values("date")
-        df_dividends = pd.read_excel(
-            xls, sheet_name="dividends", parse_dates=["date"]
-        ).sort_values("date")
-        df_forex_to_eur = pd.read_excel(
-            xls, sheet_name=forex_sheet, parse_dates=["date"]
-        ).sort_values("date")
+        df_deposits = pd.read_excel(xls, sheet_name="deposits", parse_dates=["date"])
+        df_buy_orders = df_deposits.copy()
 
-    return df_deposits, df_sales, df_dividends, df_forex_to_eur
+        df_deposits["gross_quantity"] = None
+        df_deposits.rename(
+            mapper={"fmv_or_buy_price": "fair_market_value"},
+            axis="columns",
+            inplace=True,
+        )
+        df_deposits = df_deposits[df_deposits.fees == 0]
+        df_deposits.drop(labels=["fees"], axis="columns", inplace=True)
+
+        df_buy_orders = df_buy_orders[df_buy_orders.fees != 0]
+        df_buy_orders.rename(
+            mapper={"fmv_or_buy_price": "buy_price", "net_quantity": "quantity"},
+            axis="columns",
+            inplace=True,
+        )
+
+        df_dividends = pd.read_excel(xls, sheet_name="dividends", parse_dates=["date"])
+        df_sell_orders = pd.read_excel(xls, sheet_name="sales", parse_dates=["date"])
+
+        df_currency_conversions = pd.read_excel(
+            xls, sheet_name=forex_sheet, parse_dates=["date"]
+        )
+        df_currency_conversions["target_currency"] = "EUR"
+        df_currency_conversions["foreign_amount"] = (
+            df_currency_conversions.net_amount + df_currency_conversions.fees
+        )
+        df_currency_conversions.rename(
+            mapper={"fees": "source_fees", "currency": "source_currency"},
+            axis="columns",
+            inplace=True,
+        )
+        df_currency_conversions.drop(
+            labels=["net_amount"], axis="columns", inplace=True
+        )
+
+        df_stock_splits = None
+
+    return RawData(
+        df_deposits,
+        df_dividends,
+        df_buy_orders,
+        df_sell_orders,
+        df_currency_conversions,
+        df_stock_splits,
+    )
+
+
+def read_data(sub_dir, file_name):
+    # read list of deposits, sales, dividend payments and currency conversions
+    # sort them to ensure that they are in chronological order
+    file_path = os.path.join(sub_dir, file_name)
+    with pd.ExcelFile(file_path) as xls:
+        df_deposits = pd.read_excel(xls, sheet_name="deposits", parse_dates=["date"])
+        df_dividends = pd.read_excel(xls, sheet_name="dividends", parse_dates=["date"])
+        df_buy_orders = pd.read_excel(
+            xls, sheet_name="buy_orders", parse_dates=["date"]
+        )
+        df_sell_orders = pd.read_excel(
+            xls, sheet_name="sell_orders", parse_dates=["date"]
+        )
+        df_currency_conversions = pd.read_excel(
+            xls, sheet_name="currency_conversions", parse_dates=["date"]
+        )
+        df_stock_splits = pd.read_excel(
+            xls, sheet_name="stock_splits", parse_dates=["date"]
+        )
+
+    return RawData(
+        df_deposits,
+        df_dividends,
+        df_buy_orders,
+        df_sell_orders,
+        df_currency_conversions,
+        df_stock_splits,
+    )
 
 
 def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
@@ -196,7 +291,7 @@ def write_report(
 
 
 def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
-    for _, v in forex_dict.items():
+    for v in forex_dict.values():
         for f in v:
             if f.currency == "EUR":
                 f.amount_eur_daily = f.amount
@@ -263,7 +358,7 @@ def forex_dict_to_df(forex_dict, mode):
 
 
 def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
-    for k, v in trans_dict.items():
+    for v in trans_dict.values():
         for f in v:
             buy_price, sell_price = to_decimal(f.buy_price), to_decimal(f.sell_price)
 
@@ -299,8 +394,7 @@ def filter_transact_dict(trans_dict, report_year, speculative_period=None):
     filtered_dict = {k: [] for k in trans_dict.keys()}
     for k, v in trans_dict.items():
         for f in v:
-            # filter based on sell date and quantity is larger min_quantity
-            # (the latter is to filter out Forex transactions due to rounding errors)
+            # filter based on sell date
             if f.sell_date.year == report_year:
                 if speculative_period is None:
                     filtered_dict[k].append(f)
