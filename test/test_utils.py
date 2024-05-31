@@ -6,11 +6,20 @@ from report_data import ReportData
 from utils import summarize_report
 
 
-def get_elster_summary(file_name, year, mode, apply_stock_splits=False):
+def get_elster_summary(
+    file_name,
+    year,
+    mode,
+    apply_stock_splits=True,
+):
+    legacy_mode = "legacy" in file_name
+    apply_stock_splits = apply_stock_splits and not legacy_mode
+
     report = ReportData(
         sub_dir="test/files",
         file_name=file_name,
         apply_stock_splits=apply_stock_splits,
+        legacy_mode=legacy_mode,
     )
 
     dfs = report.consolidate_report(year, mode)
@@ -18,63 +27,71 @@ def get_elster_summary(file_name, year, mode, apply_stock_splits=False):
     return summary[summary.columns[2]].values.astype(np.float64)
 
 
-order_file_names = [
-    "order_random.xlsx",
-    "order_ascending.xlsx",
-    "order_descending.xlsx",
+order_file_names_legacy = [
+    "order_random_legacy.xlsx",
+    "order_ascending_legacy.xlsx",
+    "order_descending_legacy.xlsx",
 ]
 
 
-@pytest.mark.parametrize("file_name", order_file_names)
+@pytest.mark.parametrize("file_name", order_file_names_legacy)
 def test_summarize_report_order(file_name):
-    summary = get_elster_summary(file_name, 2022, "daily")
-    assert_allclose(summary, [-297.27, 48.35, 347.51, 0.29, 6.01, 0])
+    with pytest.deprecated_call():
+        summary = get_elster_summary(file_name, 2022, "daily")
+        assert_allclose(summary, [-297.27, 48.35, 347.51, 0.29, 0, 0])
 
 
 example_outputs = [
-    ("daily", [914.25, 974.86, 247.01, 27.96, 35.04, 67.67]),
-    ("monthly_avg", [829.32, 932.75, 294.1, 28.6, 34.63, 16.86]),
-]
-
-
-example_stock_split_outputs = [
-    ("daily", [6728.57, 6691.20, 149.03, 27.96, 35.04, 67.67]),
-    ("monthly_avg", [6650.94, 6640.13, 179.86, 28.6, 34.63, 16.86]),
+    ("daily", [914.25, 974.86, 247.01, 27.96, 29.9, 66.64]),
+    ("monthly_avg", [829.32, 932.75, 294.1, 28.6, 29.54, 15.89]),
 ]
 
 
 @pytest.mark.parametrize("mode, desired", example_outputs)
+def test_summarize_report_example_legacy(mode, desired: list):
+    with pytest.deprecated_call():
+        summary = get_elster_summary("example_legacy.xlsx", 2022, mode)
+        assert_allclose(summary, desired)
+
+
+@pytest.mark.parametrize("mode, desired", example_outputs)
 def test_summarize_report_example(mode, desired: list):
-    summary = get_elster_summary("example.xlsx", 2022, mode)
+    summary = get_elster_summary("example.xlsx", 2022, mode, apply_stock_splits=False)
     assert_allclose(summary, desired)
+
+
+example_stock_split_outputs = [
+    ("daily", [6728.57, 6691.20, 149.03, 27.96, 29.9, 66.64]),
+    ("monthly_avg", [6650.94, 6640.13, 179.86, 28.6, 29.54, 15.89]),
+]
 
 
 @pytest.mark.parametrize("mode, desired", example_stock_split_outputs)
 def test_summarize_report_example_stock_splits(mode, desired: list):
-    summary = get_elster_summary(
-        "example_stock_splits.xlsx", 2022, mode, apply_stock_splits=True
-    )
+    summary = get_elster_summary("example.xlsx", 2022, mode, apply_stock_splits=True)
     assert_allclose(summary, desired)
 
 
-def test_summarize_forex_simple():
-    summary = get_elster_summary("forex_simple.xlsx", 2022, "daily")
-    assert_allclose(summary, [0, 0, 0, 0, 19, 0])
+def test_summarize_forex_simple_legacy():
+    with pytest.deprecated_call():
+        summary = get_elster_summary("forex_simple_legacy.xlsx", 2022, "daily")
+        assert_allclose(summary, [0, 0, 0, 0, 16, 0])
 
 
-exception_outputs = [
+exception_outputs_legacy = [
     (
-        "forex_not_enough_currency_in_the_end.xlsx",
-        r"Cannot convert more USD \(5000\) than owned overall.+",
+        "forex_not_enough_currency_in_the_end_legacy.xlsx",
+        r"Cannot convert more USD \(.+\) than owned overall \(.+\).",
     ),
     (
-        "forex_not_enough_currency_inbetween.xlsx",
-        r"Cannot sell the requested USD equity.+amount is not available",
+        "forex_not_enough_currency_inbetween_legacy.xlsx",
+        r"Cannot convert more USD \(.+\) than owned overall \(.+\).",
     ),
 ]
 
 
-@pytest.mark.parametrize("file_name, error_msg", exception_outputs)
-def test_summarize_exception(file_name, error_msg):
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.parametrize("file_name, error_msg", exception_outputs_legacy)
+def test_summarize_exception_legacy(file_name, error_msg):
     with pytest.raises(ValueError, match=error_msg):
         get_elster_summary(file_name, 2022, "daily")
