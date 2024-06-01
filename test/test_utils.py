@@ -78,6 +78,15 @@ def test_summarize_forex_simple_legacy():
         assert_allclose(summary, [0, 0, 0, 0, 16, 0])
 
 
+def test_summarize_forex_next_exchange_date_legacy():
+    # Earliest imported exchange date: 2009-01-02
+    with pytest.deprecated_call():
+        summary = get_elster_summary(
+            "forex_next_exchange_date_legacy.xlsx", 2022, "daily"
+        )
+        assert_allclose(summary, [0, 0, 0, 0, 0, 0])
+
+
 exception_outputs_legacy = [
     (
         "forex_not_enough_currency_in_the_end_legacy.xlsx",
@@ -86,6 +95,10 @@ exception_outputs_legacy = [
     (
         "forex_not_enough_currency_inbetween_legacy.xlsx",
         r"Cannot convert more USD \(.+\) than owned overall \(.+\).",
+    ),
+    (
+        "forex_nonexistent_exchange_date_legacy.xlsx",
+        r".+exchange rate cannot be found.+or for the following seven days",
     ),
 ]
 

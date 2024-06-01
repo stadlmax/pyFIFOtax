@@ -26,6 +26,12 @@ def to_decimal(number):
     return decimal.Decimal(number)
 
 
+def sum_decimal(series: pd.Series):
+    if series.shape[0] == 0:
+        return to_decimal(0)
+    return series.sum()
+
+
 def get_reference_rates():
     # check whether to download more recent exchange-rate data
     mod_date = None
@@ -66,9 +72,30 @@ def get_reference_rates():
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
 
+def get_monthly_rate(monthly_rates: pd.DataFrame, date: datetime, currency: str):
+    return to_decimal(monthly_rates[currency][date.year, date.month])
+
+
+def get_daily_rate(daily_rates: pd.DataFrame, date: datetime, currency: str):
+    if date in daily_rates[currency]:
+        return to_decimal(daily_rates[currency][date])
+    else:
+        # On currency settlement holidays exchanges don't operate. Go ahead and find the next valid settlement date
+        for day_increase in range(1, 8):
+            day = date + timedelta(days=day_increase)
+
+            if day in daily_rates[currency]:
+                return to_decimal(daily_rates[currency][day])
+
+    raise ValueError(
+        f"{currency} currency exchange rate cannot be found for {date.date()} or for the following seven days"
+    )
+
+
 @dataclass
 class RawData:
-    deposits: pd.DataFrame
+    rsu: pd.DataFrame
+    espp: pd.DataFrame
     dividends: pd.DataFrame
     buy_orders: pd.DataFrame
     sell_orders: pd.DataFrame
@@ -95,7 +122,7 @@ def read_data_legacy(sub_dir, file_name):
         df_deposits = pd.read_excel(xls, sheet_name="deposits", parse_dates=["date"])
         df_buy_orders = df_deposits.copy()
 
-        df_deposits["gross_quantity"] = None
+        df_deposits["gross_quantity"] = df_deposits["net_quantity"]
         df_deposits.rename(
             mapper={"fmv_or_buy_price": "fair_market_value"},
             axis="columns",
@@ -131,9 +158,11 @@ def read_data_legacy(sub_dir, file_name):
         )
 
         df_stock_splits = None
+        df_espp = None
 
     return RawData(
         df_deposits,
+        df_espp,
         df_dividends,
         df_buy_orders,
         df_sell_orders,
@@ -147,7 +176,7 @@ def read_data(sub_dir, file_name):
     # sort them to ensure that they are in chronological order
     file_path = os.path.join(sub_dir, file_name)
     with pd.ExcelFile(file_path) as xls:
-        df_deposits = pd.read_excel(xls, sheet_name="deposits", parse_dates=["date"])
+        df_rsu = pd.read_excel(xls, sheet_name="rsu", parse_dates=["date"])
         df_dividends = pd.read_excel(xls, sheet_name="dividends", parse_dates=["date"])
         df_buy_orders = pd.read_excel(
             xls, sheet_name="buy_orders", parse_dates=["date"]
@@ -161,9 +190,15 @@ def read_data(sub_dir, file_name):
         df_stock_splits = pd.read_excel(
             xls, sheet_name="stock_splits", parse_dates=["date"]
         )
+        df_espp = pd.read_excel(
+            xls,
+            sheet_name="espp",
+            parse_dates=["date"],
+        )
 
     return RawData(
-        df_deposits,
+        df_rsu,
+        df_espp,
         df_dividends,
         df_buy_orders,
         df_sell_orders,
@@ -177,31 +212,14 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     # for tax reasons, we usually also want the sum of gains
     # and the sum of losses
     share_gain_series = df_shares["Gain [EUR]"]
-    if share_gain_series[share_gain_series < 0].shape[0] > 0:
-        share_losses = share_gain_series[share_gain_series < 0].sum()
-    else:
-        share_losses = to_decimal(0)
-    if share_gain_series[share_gain_series > 0].shape[0] > 0:
-        share_gains = share_gain_series[share_gain_series > 0].sum()
-    else:
-        share_gains = to_decimal(0)
+    share_losses = sum_decimal(share_gain_series[share_gain_series < 0])
+    share_gains = sum_decimal(share_gain_series[share_gain_series > 0])
 
     forex_gain_series = df_forex["Gain [EUR]"]
 
-    if df_dividends.shape[0] > 0:
-        total_dividends = df_dividends["Amount [EUR]"].sum()
-    else:
-        total_dividends = to_decimal(0)
-
-    if df_fees.shape[0] > 0:
-        total_fees = df_fees["Amount [EUR]"].sum()
-    else:
-        total_fees = to_decimal(0)
-
-    if df_taxes.shape[0] > 0:
-        total_taxes = df_taxes["Amount [EUR]"].sum()
-    else:
-        total_taxes = to_decimal(0)
+    total_dividends = sum_decimal(df_dividends["Amount [EUR]"])
+    total_fees = sum_decimal(df_fees["Amount [EUR]"])
+    total_taxes = sum_decimal(df_taxes["Amount [EUR]"])
 
     # unlike a previous version, we have to split things here
     # losses from share can only be compared to gains from shares
@@ -211,10 +229,7 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     total_foreign_gains = share_losses + share_gains + total_dividends
     gains_from_shares = share_gains
     losses_from_shares = -share_losses
-    if forex_gain_series.shape[0] > 0:
-        total_gain_forex = forex_gain_series.sum()
-    else:
-        total_gain_forex = to_decimal(0)
+    total_gain_forex = sum_decimal(forex_gain_series)
 
     anlagen = [
         (
@@ -265,6 +280,14 @@ def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
         df.sort_values("Date", inplace=True)
     elif "Sell Date" in df:
         df.sort_values(["Sell Date", "Buy Date"], inplace=True)
+    elif "Meldezeitraum" in df:
+        df.sort_values("Meldezeitraum", inplace=True)
+    elif "ELSTER" in df.columns[0]:
+        pass  # don't sort ELSTER frames
+    else:
+        raise RuntimeError(
+            "Couldn't sort data, expected either 'Date', 'Sell Date', or 'Meldezeitraum' column to exist"
+        )
 
     df.to_excel(writer, sheet_name=name, index=False)
     worksheet = writer.sheets[name]
@@ -290,6 +313,13 @@ def write_report(
         create_report_sheet("ELSTER - Summary", df_summary, writer)
 
 
+def write_report_awv(df_z4, df_z10, sub_dir, file_name):
+    report_path = os.path.join(sub_dir, file_name)
+    with pd.ExcelWriter(report_path, engine="xlsxwriter") as writer:
+        create_report_sheet("Z4", df_z4, writer)
+        create_report_sheet("Z10", df_z10, writer)
+
+
 def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
     for v in forex_dict.values():
         for f in v:
@@ -298,22 +328,13 @@ def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
                 f.amount_eur_monthly = f.amount
             else:
                 # exchange rates are in 1 EUR : X FOREX
-                day = f.date
-                if f.date not in daily_rates[f.currency]:
-                    # On weekends the currency exchange doesn't operate. Go back some days in time to find a valid value
-                    for day_reduce in range(1, 7):
-                        day = f.date - timedelta(days=day_reduce)
-                        if day in daily_rates[f.currency]:
-                            break
-                        else:
-                            raise ValueError(
-                                f"{f.currency} currency exchange rate cannot be found for {f.date} or "
-                                "the preceding seven days"
-                            )
-
-                f.amount_eur_daily = f.amount / to_decimal(daily_rates[f.currency][day])
-                f.amount_eur_monthly = f.amount / to_decimal(
-                    monthly_rates[f.currency][f.date.year, f.date.month]
+                f.amount_eur_daily = f.amount / get_daily_rate(
+                    daily_rates, f.date, f.currency
+                )
+                f.amount_eur_monthly = f.amount / get_monthly_rate(
+                    monthly_rates,
+                    f.date,
+                    f.currency,
                 )
 
 
@@ -369,13 +390,13 @@ def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
                 sell_rate_monthly = to_decimal(1)
             else:
                 # exchange rates are in 1 EUR : X FOREX
-                buy_rate_daily = to_decimal(daily_rates[f.currency][f.buy_date])
-                buy_rate_monthly = to_decimal(
-                    monthly_rates[f.currency][f.buy_date.year, f.buy_date.month]
+                buy_rate_daily = get_daily_rate(daily_rates, f.buy_date, f.currency)
+                buy_rate_monthly = get_monthly_rate(
+                    monthly_rates, f.buy_date, f.currency
                 )
-                sell_rate_daily = to_decimal(daily_rates[f.currency][f.sell_date])
-                sell_rate_monthly = to_decimal(
-                    monthly_rates[f.currency][f.sell_date.year, f.sell_date.month]
+                sell_rate_daily = get_daily_rate(daily_rates, f.sell_date, f.currency)
+                sell_rate_monthly = get_monthly_rate(
+                    monthly_rates, f.sell_date, f.currency
                 )
 
             f.buy_price_eur_daily = buy_price / buy_rate_daily

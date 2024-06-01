@@ -1,5 +1,3 @@
-# class for representing a foreign currency to cover dividend payments, fees, quellensteuer, etc.
-# these are separated from FIFO treatments of foreign currencies
 import math
 import datetime
 import decimal
@@ -51,6 +49,12 @@ class FIFOObject:
         self.gain_eur_daily = None
         self.gain_eur_monthly = None
 
+    def total_buy_value(self):
+        return self.quantity * self.buy_price
+
+    def toal_sell_value(self):
+        return self.quantity * self.sell_price
+
 
 # class representing a FOREX object subject to FIFO treatment
 class FIFOForex(FIFOObject):
@@ -93,11 +97,18 @@ class ReportEvent:
         return f"{self.__class__.__name__} on {self.date.date()}"
 
 
-class DepositEvent(ReportEvent):
-    def __init__(self, date: datetime, symbol: str, received_shares: FIFOShare):
+class RSUEvent(ReportEvent):
+    def __init__(
+        self,
+        date: datetime,
+        symbol: str,
+        received_shares: FIFOShare,
+        withheld_shares: FIFOShare,
+    ):
         self.date = date
         self.symbol = symbol
         self.received_shares = received_shares
+        self.withheld_shares = withheld_shares
 
     @staticmethod
     def from_report_row(row):
@@ -109,10 +120,19 @@ class DepositEvent(ReportEvent):
             currency=row.currency,
         )
 
-        return DepositEvent(
+        withheld_shares = FIFOShare(
+            buy_date=row.date,
+            symbol=row.symbol,
+            buy_price=to_decimal(row.fair_market_value),
+            quantity=to_decimal(row.gross_quantity) - to_decimal(row.net_quantity),
+            currency=row.currency,
+        )
+
+        return RSUEvent(
             row.date,
             row.symbol,
             recv_share,
+            withheld_shares,
         )
 
 
@@ -157,6 +177,52 @@ class DividendEvent(ReportEvent):
             comment=f"Withheld Tax on Dividends ({row.symbol})",
         )
         return DividendEvent(row.date, row.currency, div, net_div, tax)
+
+
+class ESPPEvent(ReportEvent):
+    def __init__(
+        self,
+        date: datetime,
+        symbol: str,
+        currency: str,
+        received_shares: FIFOShare,
+        contribution: decimal,
+        bonus: decimal,
+    ):
+        self.date = date
+        self.symbol = symbol
+        self.currency = currency
+
+        self.contribution = contribution
+        self.bonus = bonus
+        self.received_shares = received_shares
+
+    @staticmethod
+    def from_report_row(row):
+        quantity = to_decimal(row.quantity)
+        buy_price = to_decimal(row.buy_price)
+        contribution = buy_price * quantity
+        fair_market_value = to_decimal(row.fair_market_value)
+        total_value = fair_market_value * quantity
+
+        bonus = total_value - contribution
+
+        received_shares = FIFOShare(
+            symbol=row.symbol,
+            quantity=quantity,
+            buy_date=row.date,
+            buy_price=fair_market_value,
+            currency=row.currency,
+        )
+
+        return ESPPEvent(
+            date=row.date,
+            symbol=row.symbol,
+            currency=row.currency,
+            received_shares=received_shares,
+            contribution=contribution,
+            bonus=bonus,
+        )
 
 
 class BuyEvent(ReportEvent):
@@ -425,3 +491,7 @@ def from_asset(asset, quantity):
         )
 
     return new_asset
+
+
+# TODO: remodel deposits as RSU (gross, net)
+# TODO: remove contribution from ESPP (implicit from buy-price and num-shares)
