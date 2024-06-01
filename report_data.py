@@ -356,6 +356,10 @@ class ReportData:
         return res
 
     def consolidate_awv_events(self, report_year, awv_threshold_eur=12_500):
+        if self.legacy_mode:
+            warnings.warn("Can't create valid AWV report in legacy mode.")
+            return None, None
+
         for e in self.awv_z4_events:
             e.set_threshold(awv_threshold_eur)
         for e in self.awv_z10_events:
@@ -379,6 +383,10 @@ class ReportData:
     def create_excel_report_awv(
         self, report_year, report_file_name, awv_threshold_eur=12_500
     ):
+        if self.legacy_mode:
+            warnings.warn("Can't create valid AWV report in legacy mode.")
+            return
+
         df_z4, df_z10 = self.consolidate_awv_events(report_year, awv_threshold_eur)
         write_report_awv(
             df_z4,

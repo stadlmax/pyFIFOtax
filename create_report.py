@@ -47,6 +47,7 @@ parser.add_argument(
 def main(sub_dir, file_name, report_year, rate_mode, report_file_name):
     report = ReportData(sub_dir=sub_dir, file_name=file_name)
     report.create_excel_report(report_year, rate_mode, report_file_name)
+    report.create_excel_report_awv(report_year, f"awv_report_{report_year}.xlsx")
 
 
 if __name__ == "__main__":

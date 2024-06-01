@@ -278,6 +278,8 @@ def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
 
     if "Date" in df:
         df.sort_values("Date", inplace=True)
+    elif "date" in df:
+        df.sort_values("date", inplace=True)
     elif "Sell Date" in df:
         df.sort_values(["Sell Date", "Buy Date"], inplace=True)
     elif "Meldezeitraum" in df:
@@ -286,7 +288,7 @@ def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
         pass  # don't sort ELSTER frames
     else:
         raise RuntimeError(
-            "Couldn't sort data, expected either 'Date', 'Sell Date', or 'Meldezeitraum' column to exist"
+            "Couldn't sort data, expected either 'Date', 'date', 'Sell Date', or 'Meldezeitraum' column to exist"
         )
 
     df.to_excel(writer, sheet_name=name, index=False)
