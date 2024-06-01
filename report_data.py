@@ -2,14 +2,23 @@ import os
 from collections import defaultdict
 import data_structures
 import warnings
+import pandas as pd
+import data_structures_awv as awv
 
 from data_structures import (
     FIFOForex,
     FIFOQueue,
 )
+
 from utils import apply_rates_forex_dict, filter_forex_dict, forex_dict_to_df
 from utils import apply_rates_transact_dict, filter_transact_dict, transact_dict_to_df
-from utils import get_reference_rates, read_data, read_data_legacy, write_report
+from utils import (
+    get_reference_rates,
+    read_data,
+    read_data_legacy,
+    write_report,
+    write_report_awv,
+)
 from utils import to_decimal
 
 
@@ -75,6 +84,10 @@ class ReportData:
         # list of supported currencies - as in we have available exchange rate data
         self.supported_currencies = None
 
+        # keep a list of Z4 / Z10 reporting events (only supporting symbol AWV at the moment)
+        self.awv_z4_events: list[awv.AWVEntryZ4] = []
+        self.awv_z10_events: list[awv.AWVEntryZ10] = []
+
         # later fill list of all events and sort according to date
         # travering the list from earliest date to latest then allows
         # for gradually building FIFO-Queues
@@ -95,6 +108,12 @@ class ReportData:
         # process report events generated from loading raw data
         self.process_report_events()
 
+        # apply rates to awv events
+        for e in self.awv_z4_events:
+            e.apply_daily_rate(self.daily_rates)
+        for e in self.awv_z10_events:
+            e.apply_daily_rate(self.daily_rates)
+
     def read_raw_data(self):
         if self.legacy_mode:
             raw_data = read_data_legacy(self.sub_dir, self.file_name)
@@ -102,14 +121,18 @@ class ReportData:
             raw_data = read_data(self.sub_dir, self.file_name)
 
         used_symbols = []
-        used_symbols.extend(list(raw_data.deposits.symbol.unique()))
+        used_symbols.extend(list(raw_data.rsu.symbol.unique()))
+        if not self.legacy_mode:
+            used_symbols.extend(list(raw_data.espp.symbol.unique()))
         used_symbols.extend(list(raw_data.dividends.symbol.unique()))
         used_symbols.extend(list(raw_data.buy_orders.symbol.unique()))
         used_symbols.extend(list(raw_data.sell_orders.symbol.unique()))
         used_symbols = set(used_symbols)
 
         used_currencies = []
-        used_currencies.extend(list(raw_data.deposits.currency.unique()))
+        used_currencies.extend(list(raw_data.rsu.currency.unique()))
+        if not self.legacy_mode:
+            used_currencies.extend(list(raw_data.espp.currency.unique()))
         used_currencies.extend(list(raw_data.dividends.currency.unique()))
         used_currencies.extend(list(raw_data.buy_orders.currency.unique()))
         used_currencies.extend(list(raw_data.sell_orders.currency.unique()))
@@ -139,9 +162,7 @@ class ReportData:
         self.sold_forex = {c: [] for c in used_currencies}
 
         # first, just create all events from raw data
-        self.report_events.extend(
-            data_structures.DepositEvent.from_report(raw_data.deposits)
-        )
+        self.report_events.extend(data_structures.RSUEvent.from_report(raw_data.rsu))
         self.report_events.extend(
             data_structures.DividendEvent.from_report(raw_data.dividends)
         )
@@ -160,11 +181,55 @@ class ReportData:
             self.report_events.extend(
                 data_structures.StockSplitEvent.from_report(raw_data.stock_splits)
             )
+        if not self.legacy_mode:
+            self.report_events.extend(
+                data_structures.ESPPEvent.from_report(raw_data.espp)
+            )
 
     def process_report_events(self):
         for event in self.report_events:
-            if isinstance(event, data_structures.DepositEvent):
+            if isinstance(event, data_structures.RSUEvent):
                 self.held_shares[event.symbol].push(event.received_shares)
+
+                if "NVDA" in event.symbol and event.received_shares.currency == "USD":
+                    bonus = awv.AWVEntryZ4RSUBonus(
+                        date=event.date,
+                        value=event.received_shares.total_buy_value()
+                        + event.withheld_shares.total_buy_value(),
+                    )
+                    bought_shares = awv.AWVEntryZ10RSUDeposit(
+                        date=event.date,
+                        quantity=event.received_shares.quantity,
+                        value=event.received_shares.total_buy_value()
+                        + event.withheld_shares.total_buy_value(),
+                    )
+                    withheld_shares = awv.AWVEntryZ10RSUTaxWithholding(
+                        date=event.date,
+                        quantity=event.withheld_shares.quantity,
+                        value=event.received_shares.total_buy_value(),
+                    )
+                    self.awv_z4_events.append(bonus)
+                    self.awv_z10_events.append(bought_shares)
+                    if event.withheld_shares.quantity > 0:
+                        self.awv_z10_events.append(withheld_shares)
+
+            elif isinstance(event, data_structures.ESPPEvent):
+                self.held_shares[event.symbol].push(event.received_shares)
+
+                if "NVDA" in event.symbol and event.currency == "USD":
+                    bonus = awv.AWVEntryZ4ESPPBonus(
+                        date=event.date,
+                        value=event.bonus,
+                    )
+
+                    bought_shares = awv.AWVEntryZ10ESPPDeposit(
+                        date=event.date,
+                        quantity=event.received_shares.quantity,
+                        value=event.received_shares.total_buy_value(),
+                    )
+
+                    self.awv_z4_events.append(bonus)
+                    self.awv_z10_events.append(bought_shares)
 
             elif isinstance(event, data_structures.DividendEvent):
                 if event.currency != self.domestic_currency:
@@ -172,6 +237,8 @@ class ReportData:
 
                 self.misc["Tax Withholding"].append(event.withheld_tax)
                 self.misc["Dividend Payments"].append(event.received_dividend)
+
+                # dividends should be small enough to not trigger AWV reportings
 
             elif isinstance(event, data_structures.BuyEvent):
                 if event.currency != self.domestic_currency:
@@ -186,6 +253,15 @@ class ReportData:
                 self.held_shares[event.symbol].push(event.received_shares)
                 self.misc["Fees"].append(event.paid_fees)
 
+                if event.currency == "USD" and "NVDA" in event.received_shares.symbol:
+                    self.awv_z10_events.append(
+                        awv.AWVEntryZ10Buy(
+                            date=event.date,
+                            quantity=event.received_shares.quantity,
+                            value=event.received_shares.total_buy_value(),
+                        )
+                    )
+
             elif isinstance(event, data_structures.SellEvent):
                 # if not enough shares to sell, pop on SHARE Queue will fail
                 tmp = self.held_shares[event.symbol].pop(
@@ -197,6 +273,15 @@ class ReportData:
                     self.held_forex[event.currency].push(event.received_forex)
 
                 self.misc["Fees"].append(event.paid_fees)
+
+                if "NVDA" in event.symbol and event.currency == "USD":
+                    self.awv_z10_events.append(
+                        awv.AWVEntryZ10Sale(
+                            date=event.date,
+                            quantity=event.quantity,
+                            value=event.quantity * event.sell_price,
+                        )
+                    )
 
             elif isinstance(event, data_structures.CurrencyConversionEvent):
                 if not (
@@ -270,6 +355,38 @@ class ReportData:
 
         return res
 
+    def consolidate_awv_events(self, report_year, awv_threshold_eur=12_500):
+        for e in self.awv_z4_events:
+            e.set_threshold(awv_threshold_eur)
+        for e in self.awv_z10_events:
+            e.set_threshold(awv_threshold_eur)
+
+        filtered_z4_events = [
+            e.as_dict() for e in self.awv_z4_events if e.date.year == report_year
+        ]
+        filtered_z4_events = [e for e in filtered_z4_events if e is not None]
+
+        filtered_z10_events = [
+            e.as_dict() for e in self.awv_z10_events if e.date.year == report_year
+        ]
+        filtered_z10_events = [e for e in filtered_z10_events if e is not None]
+
+        df_z4 = pd.DataFrame(filtered_z4_events)
+        df_z10 = pd.DataFrame(filtered_z10_events)
+
+        return df_z4, df_z10
+
+    def create_excel_report_awv(
+        self, report_year, report_file_name, awv_threshold_eur=12_500
+    ):
+        df_z4, df_z10 = self.consolidate_awv_events(report_year, awv_threshold_eur)
+        write_report_awv(
+            df_z4,
+            df_z10,
+            self.sub_dir,
+            report_file_name,
+        )
+
     def create_excel_report(self, report_year, mode, report_file_name):
         dfs = self.consolidate_report(report_year, mode)
         write_report(
@@ -277,3 +394,7 @@ class ReportData:
             self.sub_dir,
             report_file_name,
         )
+
+
+# apply exchange rates
+# check to only consider AWV for symbol=NVDA and currency=USD
