@@ -81,6 +81,14 @@ class FIFOShare(FIFOObject):
 class ReportEvent:
     def __init__(self, date: datetime):
         self.date = date
+        # add priority to make sure that buy/deposit transactions
+        # are processed before sell transactions
+        # espp/rsu deposit/dividend: prio 0
+        # buy: prio 1
+        # sell: prio 2
+        # stocksplit: 3 (at the end as assumed after market-close)
+        # currency conversions: 4
+        self.priority = 0
 
     @staticmethod
     def from_report_row(row):
@@ -109,6 +117,7 @@ class RSUEvent(ReportEvent):
         self.symbol = symbol
         self.received_shares = received_shares
         self.withheld_shares = withheld_shares
+        self.priority = 0
 
     @staticmethod
     def from_report_row(row):
@@ -150,6 +159,7 @@ class DividendEvent(ReportEvent):
         self.received_dividend = received_dividend
         self.received_net_dividend = received_net_dividend
         self.withheld_tax = withheld_tax
+        self.priority = 0
 
     @staticmethod
     def from_report_row(row):
@@ -192,6 +202,7 @@ class ESPPEvent(ReportEvent):
         self.date = date
         self.symbol = symbol
         self.currency = currency
+        self.priority = 0
 
         self.contribution = contribution
         self.bonus = bonus
@@ -241,6 +252,7 @@ class BuyEvent(ReportEvent):
         self.cost_of_shares = cost_of_shares
         self.paid_fees = paid_fees
         self.currency = currency
+        self.priority = 1
 
     @staticmethod
     def from_report_row(row):
@@ -296,6 +308,7 @@ class SellEvent(ReportEvent):
         self.sell_price = sell_price
         self.received_forex = received_forex
         self.paid_fees = paid_fees
+        self.priority = 2
 
     @staticmethod
     def from_report_row(row):
@@ -343,6 +356,7 @@ class CurrencyConversionEvent(ReportEvent):
         self.source_fees = source_fees
         self.source_currency = source_currency
         self.target_currency = target_currency
+        self.priority = 4
 
     @staticmethod
     def from_report_row(row):
@@ -366,6 +380,7 @@ class StockSplitEvent(ReportEvent):
         self.date = date
         self.symbol = symbol
         self.shares_after_split = shares_after_split
+        self.priority = 3
 
     @staticmethod
     def from_report_row(row):
