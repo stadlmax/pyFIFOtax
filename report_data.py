@@ -103,7 +103,7 @@ class ReportData:
         # read in raw data and initialize buffers based on these
         self.read_raw_data()
         # sort all events in ascending order based on their date
-        self.report_events.sort(key=lambda event: event.date)
+        self.report_events.sort(key=lambda event: (event.date, event.priority))
 
         # process report events generated from loading raw data
         self.process_report_events()
