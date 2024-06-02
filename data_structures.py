@@ -506,7 +506,3 @@ def from_asset(asset, quantity):
         )
 
     return new_asset
-
-
-# TODO: remodel deposits as RSU (gross, net)
-# TODO: remove contribution from ESPP (implicit from buy-price and num-shares)
