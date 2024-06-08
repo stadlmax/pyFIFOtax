@@ -239,6 +239,11 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
         ),
         (
             "Anlage KAP",
+            "Hilfswert: In Zeile 19 enthaltene Dividendenerträge",
+            round_decimal(total_dividends),
+        ),
+        (
+            "Anlage KAP",
             "Zeile 20: In den Zeilen 18 und 19 enthaltene Gewinne aus Aktienveräußerungen i. S. d. § 20 Abs. 2 Satz 1 Nr 1 EStG",
             round_decimal(gains_from_shares),
         ),
