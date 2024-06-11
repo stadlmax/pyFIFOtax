@@ -1,25 +1,37 @@
 import os
-from collections import defaultdict
-import data_structures
 import warnings
 import pandas as pd
-import data_structures_awv as awv
 
-from data_structures import (
+import pyfifotax.data_structures_awv as awv
+from pyfifotax.data_structures_event import (
+    ReportEvent,
+    RSUEvent,
+    ESPPEvent,
+    BuyEvent,
+    SellEvent,
+    CurrencyConversionEvent,
+    DividendEvent,
+    StockSplitEvent,
+)
+
+from pyfifotax.data_structures_fifo import (
     FIFOForex,
     FIFOQueue,
 )
-
-from utils import apply_rates_forex_dict, filter_forex_dict, forex_dict_to_df
-from utils import apply_rates_transact_dict, filter_transact_dict, transact_dict_to_df
-from utils import (
+from pyfifotax.utils import apply_rates_forex_dict, filter_forex_dict, forex_dict_to_df
+from pyfifotax.utils import (
+    apply_rates_transact_dict,
+    filter_transact_dict,
+    transact_dict_to_df,
+)
+from pyfifotax.utils import (
     get_reference_rates,
     read_data,
     read_data_legacy,
     write_report,
     write_report_awv,
 )
-from utils import to_decimal
+from pyfifotax.utils import to_decimal
 
 
 class ReportData:
@@ -29,16 +41,8 @@ class ReportData:
         file_name: str,
         apply_stock_splits: bool = True,
         domestic_currency: str = "EUR",
-        legacy_mode: bool = False,
     ):
-        self.legacy_mode = legacy_mode
-        if legacy_mode:
-            warnings.warn(
-                "Loading ReportData from legacy data layouts, some functionality might not be supported.",
-                DeprecationWarning,
-            )
-            if apply_stock_splits:
-                raise ValueError("Cannot apply stock splits for data in legacy layout.")
+        self.legacy_mode = False
 
         # sub_dir and file_name for the raw data
         self.sub_dir = sub_dir
@@ -46,11 +50,11 @@ class ReportData:
 
         # save flag to apply stock splits and remember path to file defining splits
         self.apply_stock_splits = apply_stock_splits
-        self.stock_split_file_path = os.path.join(sub_dir, "stock_splits.csv")
-        # for each share symbol, keep track of a queue of stocksplits
-        # when processing transactions, "pop" splits when applicable
-        # and modify quantity and price of stocks in queue of shares
-        self.stock_splits = defaultdict(list)
+        self.stock_split_file_path = os.path.join(sub_dir, "stock_splits.xlsx")
+        if apply_stock_splits and not os.path.exists(self.stock_split_file_path):
+            raise FileNotFoundError(
+                f"{self.stock_split_file_path} not found but set apply_stock_splits to True, abort."
+            )
 
         # list of unsold shares, a sell order will move a share from this list
         # to the list of sold shares based on FIFO requirements
@@ -91,7 +95,7 @@ class ReportData:
         # later fill list of all events and sort according to date
         # travering the list from earliest date to latest then allows
         # for gradually building FIFO-Queues
-        self.report_events: list[data_structures.ReportEvent] = []
+        self.report_events: list[ReportEvent] = []
 
         # read in currency information
         (
@@ -115,10 +119,25 @@ class ReportData:
             e.apply_daily_rate(self.daily_rates)
 
     def read_raw_data(self):
-        if self.legacy_mode:
-            raw_data = read_data_legacy(self.sub_dir, self.file_name)
-        else:
+        try:
             raw_data = read_data(self.sub_dir, self.file_name)
+        except ValueError:
+            self.legacy_mode = True
+            msg = "Loading ReportData from legacy data layouts, some functionality might not be supported."
+            msg += " See example/transactions.xlsx for the new report layout."
+            msg += " Changed behavior in particular around deposits of shares. The new format distinguishes "
+            msg += " between ESPP, RSU, and Buy Orders and thus has a different notion of price and quantity "
+            msg += " compared to the previous net_quantity and fmw_or_buy_price. For backward compatibility, "
+            msg += " an old 'deposit' with 'fee != 0' is assumed to be a buy order and 'fee = 0' is seen as"
+            msg += " a RSU deposit. This should make the behavior of the Tax Reporting identical. If this "
+            msg += " does not fit your needs, please adopt the new format of transactions as shown in the example."
+            warnings.warn(msg, DeprecationWarning)
+            raw_data = read_data_legacy(self.sub_dir, self.file_name)
+
+        if self.apply_stock_splits:
+            with pd.ExcelFile(self.stock_split_file_path) as xls:
+                df_stock_splits = pd.read_excel(xls, parse_dates=["date"])
+            raw_data.stock_splits = df_stock_splits
 
         used_symbols = []
         used_symbols.extend(list(raw_data.rsu.symbol.unique()))
@@ -162,76 +181,74 @@ class ReportData:
         self.sold_forex = {c: [] for c in used_currencies}
 
         # first, just create all events from raw data
-        self.report_events.extend(data_structures.RSUEvent.from_report(raw_data.rsu))
+        self.report_events.extend(RSUEvent.from_report(raw_data.rsu))
+        self.report_events.extend(DividendEvent.from_report(raw_data.dividends))
+        self.report_events.extend(BuyEvent.from_report(raw_data.buy_orders))
+        self.report_events.extend(SellEvent.from_report(raw_data.sell_orders))
         self.report_events.extend(
-            data_structures.DividendEvent.from_report(raw_data.dividends)
-        )
-        self.report_events.extend(
-            data_structures.BuyEvent.from_report(raw_data.buy_orders)
-        )
-        self.report_events.extend(
-            data_structures.SellEvent.from_report(raw_data.sell_orders)
-        )
-        self.report_events.extend(
-            data_structures.CurrencyConversionEvent.from_report(
-                raw_data.currency_conversions
-            )
+            CurrencyConversionEvent.from_report(raw_data.currency_conversions)
         )
         if raw_data.stock_splits is not None:
             self.report_events.extend(
-                data_structures.StockSplitEvent.from_report(raw_data.stock_splits)
+                StockSplitEvent.from_report(raw_data.stock_splits)
             )
         if not self.legacy_mode:
-            self.report_events.extend(
-                data_structures.ESPPEvent.from_report(raw_data.espp)
-            )
+            self.report_events.extend(ESPPEvent.from_report(raw_data.espp))
 
     def process_report_events(self):
         for event in self.report_events:
-            if isinstance(event, data_structures.RSUEvent):
+            if isinstance(event, RSUEvent):
                 self.held_shares[event.symbol].push(event.received_shares)
 
-                if "NVDA" in event.symbol and event.received_shares.currency == "USD":
-                    bonus = awv.AWVEntryZ4RSUBonus(
-                        date=event.date,
-                        value=event.received_shares.total_buy_value()
-                        + event.withheld_shares.total_buy_value(),
-                    )
-                    bought_shares = awv.AWVEntryZ10RSUDeposit(
-                        date=event.date,
-                        quantity=event.received_shares.quantity,
-                        value=event.received_shares.total_buy_value()
-                        + event.withheld_shares.total_buy_value(),
-                    )
-                    withheld_shares = awv.AWVEntryZ10RSUTaxWithholding(
-                        date=event.date,
-                        quantity=event.withheld_shares.quantity,
-                        value=event.received_shares.total_buy_value(),
-                    )
-                    self.awv_z4_events.append(bonus)
-                    self.awv_z10_events.append(bought_shares)
-                    if event.withheld_shares.quantity > 0:
-                        self.awv_z10_events.append(withheld_shares)
+                bonus = awv.AWVEntryZ4RSUBonus(
+                    date=event.date,
+                    symbol=event.symbol,
+                    currency=event.received_shares.currency,
+                    value=event.received_shares.total_buy_value()
+                    + event.withheld_shares.total_buy_value(),
+                )
+                bought_shares = awv.AWVEntryZ10RSUDeposit(
+                    date=event.date,
+                    symbol=event.symbol,
+                    currency=event.received_shares.currency,
+                    quantity=event.received_shares.quantity,
+                    value=event.received_shares.total_buy_value()
+                    + event.withheld_shares.total_buy_value(),
+                )
+                withheld_shares = awv.AWVEntryZ10RSUTaxWithholding(
+                    date=event.date,
+                    symbol=event.symbol,
+                    currency=event.received_shares.currency,
+                    quantity=event.withheld_shares.quantity,
+                    value=event.received_shares.total_buy_value(),
+                )
+                self.awv_z4_events.append(bonus)
+                self.awv_z10_events.append(bought_shares)
+                if event.withheld_shares.quantity > 0:
+                    self.awv_z10_events.append(withheld_shares)
 
-            elif isinstance(event, data_structures.ESPPEvent):
+            elif isinstance(event, ESPPEvent):
                 self.held_shares[event.symbol].push(event.received_shares)
 
-                if "NVDA" in event.symbol and event.currency == "USD":
-                    bonus = awv.AWVEntryZ4ESPPBonus(
-                        date=event.date,
-                        value=event.bonus,
-                    )
+                bonus = awv.AWVEntryZ4ESPPBonus(
+                    symbol=event.symbol,
+                    currency=event.currency,
+                    date=event.date,
+                    value=event.bonus,
+                )
 
-                    bought_shares = awv.AWVEntryZ10ESPPDeposit(
-                        date=event.date,
-                        quantity=event.received_shares.quantity,
-                        value=event.received_shares.total_buy_value(),
-                    )
+                bought_shares = awv.AWVEntryZ10ESPPDeposit(
+                    date=event.date,
+                    symbol=event.symbol,
+                    currency=event.currency,
+                    quantity=event.received_shares.quantity,
+                    value=event.received_shares.total_buy_value(),
+                )
 
-                    self.awv_z4_events.append(bonus)
-                    self.awv_z10_events.append(bought_shares)
+                self.awv_z4_events.append(bonus)
+                self.awv_z10_events.append(bought_shares)
 
-            elif isinstance(event, data_structures.DividendEvent):
+            elif isinstance(event, DividendEvent):
                 if event.currency != self.domestic_currency:
                     self.held_forex[event.currency].push(event.received_net_dividend)
 
@@ -240,7 +257,7 @@ class ReportData:
 
                 # dividends should be small enough to not trigger AWV reportings
 
-            elif isinstance(event, data_structures.BuyEvent):
+            elif isinstance(event, BuyEvent):
                 if event.currency != self.domestic_currency:
                     # if not enough money, pop on FOREX Queue will fail
                     tmp = self.held_forex[event.currency].pop(
@@ -253,16 +270,17 @@ class ReportData:
                 self.held_shares[event.symbol].push(event.received_shares)
                 self.misc["Fees"].append(event.paid_fees)
 
-                if event.currency == "USD" and "NVDA" in event.received_shares.symbol:
-                    self.awv_z10_events.append(
-                        awv.AWVEntryZ10Buy(
-                            date=event.date,
-                            quantity=event.received_shares.quantity,
-                            value=event.received_shares.total_buy_value(),
-                        )
+                self.awv_z10_events.append(
+                    awv.AWVEntryZ10Buy(
+                        date=event.date,
+                        symbol=event.received_shares.symbol,
+                        currency=event.currency,
+                        quantity=event.received_shares.quantity,
+                        value=event.received_shares.total_buy_value(),
                     )
+                )
 
-            elif isinstance(event, data_structures.SellEvent):
+            elif isinstance(event, SellEvent):
                 # if not enough shares to sell, pop on SHARE Queue will fail
                 tmp = self.held_shares[event.symbol].pop(
                     event.quantity, event.sell_price, event.date
@@ -274,16 +292,17 @@ class ReportData:
 
                 self.misc["Fees"].append(event.paid_fees)
 
-                if "NVDA" in event.symbol and event.currency == "USD":
-                    self.awv_z10_events.append(
-                        awv.AWVEntryZ10Sale(
-                            date=event.date,
-                            quantity=event.quantity,
-                            value=event.quantity * event.sell_price,
-                        )
+                self.awv_z10_events.append(
+                    awv.AWVEntryZ10Sale(
+                        date=event.date,
+                        symbol=event.symbol,
+                        currency=event.currency,
+                        quantity=event.quantity,
+                        value=event.quantity * event.sell_price,
                     )
+                )
 
-            elif isinstance(event, data_structures.CurrencyConversionEvent):
+            elif isinstance(event, CurrencyConversionEvent):
                 if not (
                     event.source_currency == self.domestic_currency
                     or event.target_currency == self.domestic_currency
@@ -311,7 +330,7 @@ class ReportData:
                     self.sold_forex[event.source_currency].extend(tmp)
                     self.misc["Fees"].append(event.source_fees)
 
-            elif isinstance(event, data_structures.StockSplitEvent):
+            elif isinstance(event, StockSplitEvent):
                 if self.apply_stock_splits:
                     self.held_shares[event.symbol].apply_split(event.shares_after_split)
 
@@ -326,7 +345,10 @@ class ReportData:
         apply_rates_transact_dict(self.sold_forex, self.daily_rates, self.monthly_rates)
 
     def consolidate_report(self, report_year, mode):
-        assert mode.lower() in ["daily", "monthly_avg"]
+        if mode.lower() not in ["daily", "monthly_avg"]:
+            raise ValueError(
+                f"Expected exchange rate mode to be in (daily, monthly_avg), got {mode}."
+            )
         self.apply_exchange_rates()
 
         # for fees, taxes, dividends: only filter for date in report_year
@@ -357,7 +379,12 @@ class ReportData:
 
     def consolidate_awv_events(self, report_year, awv_threshold_eur=12_500):
         if self.legacy_mode:
-            warnings.warn("Can't create valid AWV report in legacy mode.")
+            msg = "Can't create valid AWV report in legacy mode."
+            msg += " This is mainly due to the new format introducing more information, e.g."
+            msg += " the difference betwen buy_price and fair_market_value for ESPP which allows"
+            msg += " to automatically calculcate your own contribution and the company bonus."
+            msg += " For AWV reports, please switch to the new format."
+            warnings.warn(msg)
             return None, None
 
         for e in self.awv_z4_events:
@@ -384,7 +411,12 @@ class ReportData:
         self, report_year, report_file_name, awv_threshold_eur=12_500
     ):
         if self.legacy_mode:
-            warnings.warn("Can't create valid AWV report in legacy mode.")
+            msg = "Can't create valid AWV report in legacy mode."
+            msg += " This is mainly due to the new format introducing more information, e.g."
+            msg += " the difference betwen buy_price and fair_market_value for ESPP which allows"
+            msg += " to automatically calculcate your own contribution and the company bonus."
+            msg += " For AWV reports, please switch to the new format."
+            warnings.warn(msg)
             return
 
         df_z4, df_z10 = self.consolidate_awv_events(report_year, awv_threshold_eur)
@@ -402,7 +434,3 @@ class ReportData:
             self.sub_dir,
             report_file_name,
         )
-
-
-# apply exchange rates
-# check to only consider AWV for symbol=NVDA and currency=USD

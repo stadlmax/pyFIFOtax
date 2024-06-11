@@ -4,7 +4,7 @@ import datetime
 import requests
 import zipfile
 import decimal
-from urllib.parse import urlparse
+import warnings
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -114,9 +114,10 @@ def read_data_legacy(sub_dir, file_name):
             else "currency conversion to EUR"
         )
         if forex_sheet == "wire_transfers":
-            print(
+            warnings.warn(
                 '"wire_transfers" as a sheet name is deprecated and discouraged; '
-                'use "currency conversion to EUR" instead'
+                'use "currency conversion to EUR" instead',
+                DeprecationWarning,
             )
 
         df_deposits = pd.read_excel(xls, sheet_name="deposits", parse_dates=["date"])
@@ -187,9 +188,7 @@ def read_data(sub_dir, file_name):
         df_currency_conversions = pd.read_excel(
             xls, sheet_name="currency_conversions", parse_dates=["date"]
         )
-        df_stock_splits = pd.read_excel(
-            xls, sheet_name="stock_splits", parse_dates=["date"]
-        )
+        df_stock_splits = None  # set later
         df_espp = pd.read_excel(
             xls,
             sheet_name="espp",
@@ -236,11 +235,6 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
             "Anlage KAP",
             "Zeile 19: Ausländische Kapitalerträge (ohne Betrag lt. Zeile 47)",
             round_decimal(total_foreign_gains),
-        ),
-        (
-            "Anlage KAP",
-            "Hilfswert: In Zeile 19 enthaltene Dividendenerträge",
-            round_decimal(total_dividends),
         ),
         (
             "Anlage KAP",
@@ -306,10 +300,76 @@ def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
     worksheet.center_horizontally()
 
 
+def add_total_amount_row(df):
+    cols = df.columns
+    amount = df["Amount [EUR]"].sum()
+
+    total_dfs = []
+    # add empty row first
+    new_row = {c: None for c in cols}
+    new_row = pd.DataFrame([new_row])
+    total_dfs.append(new_row)
+
+    new_row = {c: None for c in cols}
+    new_row["Symbol"] = "Total Amount"
+    new_row["Amount [EUR]"] = amount
+    new_row = pd.DataFrame([new_row])
+    total_dfs.append(new_row)
+
+    df = pd.concat([df, *total_dfs], ignore_index=True)
+
+    return df
+
+
+def add_total_gain_rows(df):
+    cols = df.columns
+    all_gains = df["Gain [EUR]"]
+    net_gains = all_gains.sum()
+    gains = all_gains[all_gains > 0].sum()
+    losses = all_gains[all_gains < 0].sum()
+
+    total_dfs = []
+    # add empty row first
+    new_row = {c: None for c in cols}
+    total_dfs.append(pd.DataFrame([new_row]))
+
+    new_row = {c: None for c in cols}
+    new_row["Symbol"] = "Gains (incl. losses)"
+    new_row["Gain [EUR]"] = net_gains
+    total_dfs.append(pd.DataFrame([new_row]))
+
+    new_row = {c: None for c in cols}
+    new_row["Symbol"] = "Gains (excl. losses)"
+    new_row["Gain [EUR]"] = gains
+    total_dfs.append(pd.DataFrame([new_row]))
+
+    new_row = {c: None for c in cols}
+    new_row["Symbol"] = "Losses"
+    new_row["Gain [EUR]"] = losses
+    total_dfs.append(pd.DataFrame([new_row]))
+
+    df = pd.concat([df, *total_dfs], ignore_index=True)
+
+    return df
+
+
 def write_report(
     df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, file_name
 ):
+    df_shares = df_shares.copy()
+    df_forex = df_forex.copy()
+    df_dividends = df_dividends.copy()
+    df_fees = df_fees.copy()
+    df_taxes = df_taxes.copy()
+
     df_summary = summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes)
+
+    df_shares = add_total_gain_rows(df_shares)
+    df_forex = add_total_gain_rows(df_forex)
+    df_dividends = add_total_amount_row(df_dividends)
+    df_fees = add_total_amount_row(df_fees)
+    df_taxes = add_total_amount_row(df_taxes)
+
     report_path = os.path.join(sub_dir, file_name)
     with pd.ExcelWriter(report_path, engine="xlsxwriter") as writer:
         create_report_sheet("Shares", df_shares, writer)
