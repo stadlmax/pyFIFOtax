@@ -2,8 +2,8 @@ import pytest
 import numpy as np
 from numpy.testing import assert_allclose
 
-from report_data import ReportData
-from utils import summarize_report
+from pyfifotax.report_data import ReportData
+from pyfifotax.utils import summarize_report
 
 
 def get_elster_summary(
@@ -12,6 +12,7 @@ def get_elster_summary(
     mode,
     apply_stock_splits=True,
 ):
+    # "legacy" transactions don't consider stock splits
     legacy_mode = "legacy" in file_name
     apply_stock_splits = apply_stock_splits and not legacy_mode
 
@@ -19,7 +20,6 @@ def get_elster_summary(
         sub_dir="test/files",
         file_name=file_name,
         apply_stock_splits=apply_stock_splits,
-        legacy_mode=legacy_mode,
     )
 
     dfs = report.consolidate_report(year, mode)

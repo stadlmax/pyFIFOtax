@@ -1,6 +1,7 @@
 import argparse
 
-from report_data import ReportData
+from pyfifotax.report_data import ReportData
+
 
 parser = argparse.ArgumentParser(
     description="Simple tool for calculating gains/losses from \
