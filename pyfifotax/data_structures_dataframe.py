@@ -2,6 +2,8 @@ from datetime import datetime
 from dataclasses import dataclass, asdict
 import pandas as pd
 
+from typing import Optional
+
 
 @dataclass
 class DataFrameRow:
@@ -73,33 +75,71 @@ class ESPPRow(DataFrameRow):
 class RSURow(DataFrameRow):
     date: datetime
     symbol: str
-    gross_quantity: pd.Float64Dtype
+    gross_quantity: Optional[pd.Float64Dtype]
     net_quantity: pd.Float64Dtype
     fair_market_value: pd.Float64Dtype
     currency: str
 
     @staticmethod
-    def from_schwab_json(json_dict):
+    def from_schwab_lapse_json(json_dict):
         date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
         symbol = json_dict["Symbol"]
         gross_quantity = pd.to_numeric(json_dict["Quantity"])
+
         if not len(json_dict["TransactionDetails"]) == 1:
             raise RuntimeError(
                 "Could not convert RSU information from Schwab JSON, expected TransactionDetails to be of length 1."
             )
         details = json_dict["TransactionDetails"][0]["Details"]
-        net_quantity = pd.to_numeric(details["NetSharesDeposited"])
         fair_market_value = pd.to_numeric(
             details["FairMarketValuePrice"].strip("$").replace(",", "")
         )
 
-        return RSURow(
-            date,
-            symbol,
-            gross_quantity,
-            net_quantity,
-            fair_market_value,
-            "USD",
+        net_quantity = pd.to_numeric(details["NetSharesDeposited"])
+
+        award_id = details["AwardId"]
+
+        return (
+            RSURow(
+                date,
+                symbol,
+                gross_quantity,
+                net_quantity,
+                fair_market_value,
+                "USD",
+            ),
+            award_id,
+        )
+
+    @staticmethod
+    def from_schwab_deposit_json(json_dict):
+        date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
+        symbol = json_dict["Symbol"]
+        net_quantity = pd.to_numeric(json_dict["Quantity"])
+        # to be set later
+        gross_quantity = None
+
+        if not len(json_dict["TransactionDetails"]) == 1:
+            raise RuntimeError(
+                "Could not convert RSU information from Schwab JSON, expected TransactionDetails to be of length 1."
+            )
+        details = json_dict["TransactionDetails"][0]["Details"]
+        fair_market_value = pd.to_numeric(
+            details["VestFairMarketValue"].strip("$").replace(",", "")
+        )
+
+        award_id = details["AwardId"]
+
+        return (
+            RSURow(
+                date,
+                symbol,
+                gross_quantity,
+                net_quantity,
+                fair_market_value,
+                "USD",
+            ),
+            award_id,
         )
 
     @staticmethod

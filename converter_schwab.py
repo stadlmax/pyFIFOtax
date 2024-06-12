@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import warnings
 import json
@@ -38,6 +39,8 @@ parser.add_argument(
 
 def process_schwab_json(json_file_name, xlsx_file_name):
     schwab_rsu_events = []
+    schwab_rsu_deposit_events = {}
+    schwab_rsu_lapse_events = {}
     schwab_espp_events = []
     schwab_dividend_events = []
     schwab_buy_events = [BuyOrderRow.empty().to_dict()]
@@ -49,13 +52,25 @@ def process_schwab_json(json_file_name, xlsx_file_name):
         for e in d["Transactions"]:
             if e["Action"] == "Deposit" and e["Description"] == "ESPP":
                 schwab_espp_events.append(ESPPRow.from_schwab_json(e).to_dict())
+
+            # assumption behind RSU: each grant has its own vest/deposit event
+            # assumption behind RSU: award-id, year, and month are unique to each
+            # deposit/lapse event (day of deposit and lapse might differ)
             elif (
                 e["Action"] == "Lapse" and e["Description"] == "Restricted Stock Lapse"
             ):
-                schwab_rsu_events.append(RSURow.from_schwab_json(e).to_dict())
+                tmp, award_id = RSURow.from_schwab_lapse_json(e)
+                key = (tmp.date.year, tmp.date.month, award_id)
+                if key in schwab_rsu_lapse_events:
+                    raise RuntimeError("Found duplicated RSU Lapse event: {tmp}")
+                schwab_rsu_lapse_events[key] = tmp
 
             elif e["Action"] == "Deposit" and e["Description"] == "RS":
-                pass  # deposit of RSU shares covered in Lapse
+                tmp, award_id = RSURow.from_schwab_deposit_json(e)
+                key = (tmp.date.year, tmp.date.month, award_id)
+                if key in schwab_rsu_deposit_events:
+                    raise RuntimeError(f"Found duplicated RSU deposit event: {tmp}")
+                schwab_rsu_deposit_events[key] = tmp
 
             elif e["Action"] == "Dividend" and e["Description"] == "Credit":
                 tmp = DividendRow.from_schwab_json(e)
@@ -97,8 +112,27 @@ def process_schwab_json(json_file_name, xlsx_file_name):
                 date = e["Date"]
                 warnings.warn(f"skipping {act} on {date} ({sym}: {des})")
 
-    if len(schwab_rsu_events) == 0:
-        schwab_rsu_events.append(RSURow.empty().to_dict())
+    if len(schwab_rsu_lapse_events) != len(schwab_rsu_deposit_events):
+        raise RuntimeError(
+            f"Number of RSU Lapses {len(schwab_rsu_lapse_events)} does not match number of RSU deposits {len(schwab_rsu_deposit_events)}"
+        )
+    elif len(schwab_rsu_lapse_events) > 0:
+        for key, rsu in schwab_rsu_deposit_events.items():
+            if key in schwab_rsu_lapse_events:
+                rsu_lapse = schwab_rsu_lapse_events[key]
+            else:
+                raise ValueError(
+                    f"RSU Deposit {key} does not have a matching Lapse Event"
+                )
+            # schwab applies splits on historical lapse data but not on deposits
+            # thus, use this difference to determine split factor on-the-fly
+            # based on the split factor, we then can rely on the gross quantity
+            # in the lapse event while the prices for the deposit event are already
+            # correct
+            split_factor = rsu_lapse.net_quantity / rsu.net_quantity
+            rsu.gross_quantity = rsu_lapse.gross_quantity / split_factor
+            schwab_rsu_events.append(rsu)
+
     if len(schwab_espp_events) == 0:
         schwab_espp_events.append(ESPPRow.empty().to_dict())
     if len(schwab_dividend_events) == 0:
@@ -117,7 +151,9 @@ def process_schwab_json(json_file_name, xlsx_file_name):
         "currency_conversions": pd.DataFrame(schwab_wire_events),
     }
 
-    with pd.ExcelWriter(xlsx_file_name, engine="xlsxwriter") as writer:
+    with pd.ExcelWriter(
+        xlsx_file_name, engine="xlsxwriter", datetime_format="yyyy-mm-dd"
+    ) as writer:
         for k, v in dfs.items():
             create_report_sheet(k, v, writer)
             # overwrite column width somewhat inline with manual examples
