@@ -1,4 +1,3 @@
-import datetime
 import decimal
 import pandas as pd
 import warnings
@@ -12,6 +11,9 @@ class AWVEntry:
     def __init__(self):
         # modify when regulations change
         self.awv_threshold_eur = to_decimal(12_500)
+        self.value = None
+        self.date = None
+        self.currency = None
 
     def set_threshold(self, val: int):
         self.awv_threshold_eur = to_decimal(val)
@@ -20,8 +22,13 @@ class AWVEntry:
         raise NotImplementedError
 
     def apply_daily_rate(self, daily_rates: pd.DataFrame):
+        if (self.value is None) or (self.date is None) or (self.currency is None):
+            raise RuntimeError("calling apply_daily_rate on uninitialized AWVEntry")
         self.value_eur = self.value / get_daily_rate(
-            daily_rates, self.date, self.currency
+            daily_rates,
+            self.date,
+            self.currency,
+            domestic_currency="EUR",
         )
 
 
@@ -247,7 +254,7 @@ class AWVEntryZ10ESPPDeposit(AWVEntryZ10):
             comment=(
                 "NVIDIA Corp. (Erhalt Aktien aus ESPP)"
                 if is_nvidia
-                else f"{symbol} [FILL OUT FULl COMPANY NAME] (Erhalt Aktien aus ESPP)"
+                else f"{symbol} [FILL OUT FULL COMPANY NAME] (Erhalt Aktien aus ESPP)"
             ),
             quantity=quantity,
             value=value,

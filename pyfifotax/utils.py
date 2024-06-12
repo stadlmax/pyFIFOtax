@@ -72,20 +72,30 @@ def get_reference_rates():
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
 
-def get_monthly_rate(monthly_rates: pd.DataFrame, date: datetime, currency: str):
+def get_monthly_rate(
+    monthly_rates: pd.DataFrame, date: datetime, currency: str, domestic_currency: str
+):
+    if currency == domestic_currency:
+        return to_decimal(1)
+
     return to_decimal(monthly_rates[currency][date.year, date.month])
 
 
-def get_daily_rate(daily_rates: pd.DataFrame, date: datetime, currency: str):
+def get_daily_rate(
+    daily_rates: pd.DataFrame, date: datetime, currency: str, domestic_currency: str
+):
+    if currency == domestic_currency:
+        return to_decimal(1)
+
     if date in daily_rates[currency]:
         return to_decimal(daily_rates[currency][date])
-    else:
-        # On currency settlement holidays exchanges don't operate. Go ahead and find the next valid settlement date
-        for day_increase in range(1, 8):
-            day = date + timedelta(days=day_increase)
 
-            if day in daily_rates[currency]:
-                return to_decimal(daily_rates[currency][day])
+    # On currency settlement holidays exchanges don't operate. Go ahead and find the next valid settlement date
+    for day_increase in range(1, 8):
+        day = date + timedelta(days=day_increase)
+
+        if day in daily_rates[currency]:
+            return to_decimal(daily_rates[currency][day])
 
     raise ValueError(
         f"{currency} currency exchange rate cannot be found for {date.date()} or for the following seven days"
@@ -272,9 +282,6 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
 
 
 def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
-    if df.empty:
-        return
-
     if "Date" in df:
         df.sort_values("Date", inplace=True)
     elif "date" in df:
@@ -290,7 +297,11 @@ def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
             "Couldn't sort data, expected either 'Date', 'date', 'Sell Date', or 'Meldezeitraum' column to exist"
         )
 
-    df.to_excel(writer, sheet_name=name, index=False)
+    for c in df.columns:
+        if not df[c].empty and isinstance(df[c].iloc[0], decimal.Decimal):
+            df[c] = df[c].astype(float)
+
+    df.to_excel(writer, sheet_name=name, index=False, float_format="%.2f")
     worksheet = writer.sheets[name]
     worksheet.autofit()  # Adjust column widths to their maximum lengths
     worksheet.set_landscape()
@@ -307,6 +318,7 @@ def add_total_amount_row(df):
     total_dfs = []
     # add empty row first
     new_row = {c: None for c in cols}
+    new_row["Symbol"] = "------------"
     new_row = pd.DataFrame([new_row])
     total_dfs.append(new_row)
 
@@ -331,6 +343,7 @@ def add_total_gain_rows(df):
     total_dfs = []
     # add empty row first
     new_row = {c: None for c in cols}
+    new_row["Symbol"] = "---------------------"
     total_dfs.append(pd.DataFrame([new_row]))
 
     new_row = {c: None for c in cols}
@@ -387,22 +400,22 @@ def write_report_awv(df_z4, df_z10, sub_dir, file_name):
         create_report_sheet("Z10", df_z10, writer)
 
 
-def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
+def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates, domestic_currency):
     for v in forex_dict.values():
         for f in v:
-            if f.currency == "EUR":
-                f.amount_eur_daily = f.amount
-                f.amount_eur_monthly = f.amount
-            else:
-                # exchange rates are in 1 EUR : X FOREX
-                f.amount_eur_daily = f.amount / get_daily_rate(
-                    daily_rates, f.date, f.currency
-                )
-                f.amount_eur_monthly = f.amount / get_monthly_rate(
-                    monthly_rates,
-                    f.date,
-                    f.currency,
-                )
+            # exchange rates are in 1 EUR : X FOREX
+            f.amount_eur_daily = f.amount / get_daily_rate(
+                daily_rates,
+                f.date,
+                f.currency,
+                domestic_currency,
+            )
+            f.amount_eur_monthly = f.amount / get_monthly_rate(
+                monthly_rates,
+                f.date,
+                f.currency,
+                domestic_currency,
+            )
 
 
 def filter_forex_dict(forex_dict, report_year):
@@ -445,26 +458,27 @@ def forex_dict_to_df(forex_dict, mode):
     return df
 
 
-def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
+def apply_rates_transact_dict(
+    trans_dict, daily_rates, monthly_rates, domestic_currency
+):
     for v in trans_dict.values():
         for f in v:
             buy_price, sell_price = to_decimal(f.buy_price), to_decimal(f.sell_price)
 
-            if f.currency == "EUR":
-                buy_rate_daily = to_decimal(1)
-                buy_rate_monthly = to_decimal(1)
-                sell_rate_daily = to_decimal(1)
-                sell_rate_monthly = to_decimal(1)
-            else:
-                # exchange rates are in 1 EUR : X FOREX
-                buy_rate_daily = get_daily_rate(daily_rates, f.buy_date, f.currency)
-                buy_rate_monthly = get_monthly_rate(
-                    monthly_rates, f.buy_date, f.currency
-                )
-                sell_rate_daily = get_daily_rate(daily_rates, f.sell_date, f.currency)
-                sell_rate_monthly = get_monthly_rate(
-                    monthly_rates, f.sell_date, f.currency
-                )
+            # exchange rates are in 1 EUR : X FOREX
+            buy_rate_daily = get_daily_rate(
+                daily_rates, f.buy_date, f.currency, domestic_currency
+            )
+            buy_rate_monthly = get_monthly_rate(
+                monthly_rates, f.buy_date, f.currency, domestic_currency
+            )
+
+            sell_rate_daily = get_daily_rate(
+                daily_rates, f.sell_date, f.currency, domestic_currency
+            )
+            sell_rate_monthly = get_monthly_rate(
+                monthly_rates, f.sell_date, f.currency, domestic_currency
+            )
 
             f.buy_price_eur_daily = buy_price / buy_rate_daily
             f.buy_price_eur_monthly = buy_price / buy_rate_monthly
