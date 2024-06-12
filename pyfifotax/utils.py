@@ -15,7 +15,7 @@ def get_date(forex):
     return forex.date
 
 
-def round_decimal(number, precision: str = "0.01"):
+def round_decimal(number, precision: str):
     return number.quantize(
         decimal.Decimal(precision),
         rounding=decimal.ROUND_HALF_UP,
@@ -244,32 +244,34 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
         (
             "Anlage KAP",
             "Zeile 19: Ausländische Kapitalerträge (ohne Betrag lt. Zeile 47)",
-            round_decimal(total_foreign_gains),
+            round_decimal(total_foreign_gains, precision="0.01"),
         ),
         (
             "Anlage KAP",
             "Zeile 20: In den Zeilen 18 und 19 enthaltene Gewinne aus Aktienveräußerungen i. S. d. § 20 Abs. 2 Satz 1 Nr 1 EStG",
-            round_decimal(gains_from_shares),
+            round_decimal(gains_from_shares, precision="0.01"),
         ),
         (
             "Anlage KAP",
             "Zeile 23: In den Zeilen 18 und 19 enthaltene Verluste aus der Veräuerung von Aktien i. S. d. § 20 Abs. 2 Satz 1 Nr. 1 EStG",
-            round_decimal(losses_from_shares),
+            round_decimal(losses_from_shares, precision="0.01"),
         ),
         (
             "Anlage KAP",
             "Zeile 41: Anrechenbare noch nicht angerechnete ausländische Steuern",
-            round_decimal(total_taxes),
+            round_decimal(total_taxes, precision="0.01"),
         ),
         (
             "Anlage N",
             "Zeile 48: (Werbungskosten Sonstiges): Überweisungsgebühren auf deutsches Konto für Gehaltsbestandteil RSU/ESPP",
-            round_decimal(total_fees),
+            round_decimal(total_fees, precision="0.01"),
         ),
         (
             "Anlage SO",
             "Zeilen 42 - 48: Gewinn / Verlust aus Verkauf von Fremdwährungen",
-            round_decimal(total_gain_forex),  # here: the sum should be fine
+            round_decimal(
+                total_gain_forex, precision="0.01"
+            ),  # here: the sum should be fine
         ),
     ]
     summary = {
@@ -452,9 +454,13 @@ def forex_dict_to_df(forex_dict, mode):
             amount = f"{f.amount:.2f} {f.currency}"
             tmp["Amount"].append(amount)
             if mode == "daily":
-                tmp["Amount [EUR]"].append(round_decimal(f.amount_eur_daily))
+                tmp["Amount [EUR]"].append(
+                    round_decimal(f.amount_eur_daily, precision="0.01")
+                )
             else:
-                tmp["Amount [EUR]"].append(round_decimal(f.amount_eur_monthly))
+                tmp["Amount [EUR]"].append(
+                    round_decimal(f.amount_eur_monthly, precision="0.01")
+                )
 
     df = pd.DataFrame(
         tmp, columns=["Symbol", "Comment", "Date", "Amount", "Amount [EUR]"]
@@ -528,9 +534,9 @@ def transact_dict_to_df(transact_dict, mode):
         for f in v:
             tmp["Symbol"].append(k)
             if f.__class__.__name__ == "FIFOShare":
-                tmp["Quantity"].append(round_decimal(f.quantity))
+                tmp["Quantity"].append(round_decimal(f.quantity, precision="0.01"))
             else:
-                tmp["Quantity"].append(round_decimal(f.quantity))
+                tmp["Quantity"].append(round_decimal(f.quantity, precision="0.01"))
 
             buy_date = f"{f.buy_date.year}-{f.buy_date.month:02}-{f.buy_date.day:02}"
             sell_date = (
@@ -541,13 +547,25 @@ def transact_dict_to_df(transact_dict, mode):
             tmp["Buy Price"].append(f"{f.buy_price:.2f} {f.currency}")
             tmp["Sell Price"].append(f"{f.sell_price:.2f} {f.currency}")
             if mode.lower() == "daily":
-                tmp["Buy Price [EUR]"].append(round_decimal(f.buy_price_eur_daily))
-                tmp["Sell Price [EUR]"].append(round_decimal(f.sell_price_eur_daily))
-                tmp["Gain [EUR]"].append(round_decimal(f.gain_eur_daily))
+                tmp["Buy Price [EUR]"].append(
+                    round_decimal(f.buy_price_eur_daily, precision="0.01")
+                )
+                tmp["Sell Price [EUR]"].append(
+                    round_decimal(f.sell_price_eur_daily, precision="0.01")
+                )
+                tmp["Gain [EUR]"].append(
+                    round_decimal(f.gain_eur_daily, precision="0.01")
+                )
             else:
-                tmp["Buy Price [EUR]"].append(round_decimal(f.buy_price_eur_monthly))
-                tmp["Sell Price [EUR]"].append(round_decimal(f.sell_price_eur_monthly))
-                tmp["Gain [EUR]"].append(round_decimal(f.gain_eur_monthly))
+                tmp["Buy Price [EUR]"].append(
+                    round_decimal(f.buy_price_eur_monthly, precision="0.01")
+                )
+                tmp["Sell Price [EUR]"].append(
+                    round_decimal(f.sell_price_eur_monthly, precision="0.01")
+                )
+                tmp["Gain [EUR]"].append(
+                    round_decimal(f.gain_eur_monthly, precision="0.01")
+                )
 
     df = pd.DataFrame(
         tmp,
