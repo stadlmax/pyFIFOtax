@@ -233,7 +233,7 @@ class BuyEvent(ReportEvent):
         # e.g. 100.7438, the deposited value, however,
         # is rounded to full cents
         # TODO: check if rounding mode matches schwab
-        cost_of_shares = round_decimal(buy_price * quantity - fees)
+        cost_of_shares = round_decimal(buy_price * quantity - fees, precision="0.01")
         return BuyEvent(
             row.date,
             row.symbol,
@@ -274,7 +274,7 @@ class SellEvent(ReportEvent):
         # is rounded to full cents
         # TODO: check if rounding mode matches schwab
         net_proceeds = sell_price * quantity - fees
-        net_proceeds = round_decimal(net_proceeds)
+        net_proceeds = round_decimal(net_proceeds, precision="0.01")
         if not (net_proceeds >= 0):
             raise ValueError(
                 f"Expected non-negative net proceeds from sale of shares but got {net_proceeds}"

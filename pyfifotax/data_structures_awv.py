@@ -179,7 +179,7 @@ class AWVEntryZ10RSUTaxWithholding(AWVEntryZ10):
             comment=(
                 "NVIDIA Corp. (Verkauf zur Erzielung dt. EkSt.)"
                 if is_nvidia
-                else f"{symbol} [FILl OUT FULL COMPANY NAME] (Verkauf zur Erzielung dt. EkSt)"
+                else f"{symbol} [FILL OUT FULL COMPANY NAME] (Verkauf zur Erzielung dt. EkSt)"
             ),
             quantity=quantity,
             value=value,
