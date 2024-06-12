@@ -384,7 +384,9 @@ def write_report(
     df_taxes = add_total_amount_row(df_taxes)
 
     report_path = os.path.join(sub_dir, file_name)
-    with pd.ExcelWriter(report_path, engine="xlsxwriter") as writer:
+    with pd.ExcelWriter(
+        report_path, engine="xlsxwriter", datetime_format="yyyy-mm-dd"
+    ) as writer:
         create_report_sheet("Shares", df_shares, writer)
         create_report_sheet("Foreign Currencies", df_forex, writer)
         create_report_sheet("Dividend Payments", df_dividends, writer)
@@ -395,7 +397,9 @@ def write_report(
 
 def write_report_awv(df_z4, df_z10, sub_dir, file_name):
     report_path = os.path.join(sub_dir, file_name)
-    with pd.ExcelWriter(report_path, engine="xlsxwriter") as writer:
+    with pd.ExcelWriter(
+        report_path, engine="xlsxwriter", datetime_format="yyyy-mm-dd"
+    ) as writer:
         create_report_sheet("Z4", df_z4, writer)
         create_report_sheet("Z10", df_z10, writer)
 
