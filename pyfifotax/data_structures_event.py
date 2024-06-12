@@ -1,7 +1,7 @@
-import datetime
 import decimal
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional
 
 from pyfifotax.data_structures_fifo import FIFOForex, FIFOShare, Forex
 from pyfifotax.data_structures_dataframe import (
@@ -90,7 +90,7 @@ class DividendEvent(ReportEvent):
         currency: str,
         received_dividend: Forex,
         received_net_dividend: FIFOForex,
-        withheld_tax: Forex,
+        withheld_tax: Optional[Forex],
     ):
         super().__init__(date, 0)
         self.currency = currency
@@ -124,12 +124,15 @@ class DividendEvent(ReportEvent):
             quantity=net_amount,
             source=f"Received Net Dividend Payment ({row.symbol})",
         )
-        tax = Forex(
-            currency=row.currency,
-            date=row.date,
-            amount=tax_amount,
-            comment=f"Withheld Tax on Dividends ({row.symbol})",
-        )
+        if tax_amount > 0:
+            tax = Forex(
+                currency=row.currency,
+                date=row.date,
+                amount=tax_amount,
+                comment=f"Withheld Tax on Dividends ({row.symbol})",
+            )
+        else:
+            tax = None
         return DividendEvent(row.date, row.currency, div, net_div, tax)
 
 
@@ -187,7 +190,7 @@ class BuyEvent(ReportEvent):
         symbol: str,
         received_shares: FIFOShare,
         cost_of_shares: decimal,
-        paid_fees: Forex,
+        paid_fees: Optional[Forex],
         currency: str,
     ):
         super().__init__(date, 1)
@@ -212,12 +215,19 @@ class BuyEvent(ReportEvent):
             currency=row.currency,
         )
 
-        paid_fees = Forex(
-            currency=row.currency,
-            date=row.date,
-            amount=fees,
-            comment=f"Fees for Buy Order ({quantity:.2f} x {row.symbol})",
-        )
+        if fees < 0:
+            msg = f"For Transaction on {row.date}, fee of {fees} {row.currency} is negative."
+            raise ValueError(msg)
+
+        if fees > 0:
+            paid_fees = Forex(
+                currency=row.currency,
+                date=row.date,
+                amount=fees,
+                comment=f"Fees for Buy Order ({quantity:.2f} x {row.symbol})",
+            )
+        else:
+            paid_fees = None
 
         # schwab sometimes has sub-cent share prices
         # e.g. 100.7438, the deposited value, however,
@@ -243,7 +253,7 @@ class SellEvent(ReportEvent):
         quantity: decimal,
         sell_price: decimal,
         received_forex: FIFOForex,
-        paid_fees: Forex,
+        paid_fees: Optional[Forex],
     ):
         super().__init__(date, 2)
         self.symbol = symbol
@@ -275,12 +285,19 @@ class SellEvent(ReportEvent):
             buy_date=row.date,
             source="Sales Proceeds",
         )
-        fees = Forex(
-            currency=row.currency,
-            date=row.date,
-            amount=fees,
-            comment=f"Fees for Sell Order ({quantity:.2f} x {row.symbol})",
-        )
+        if fees < 0:
+            msg = f"For Transaction on {row.date}, fee of {fees} {row.currency} is negative."
+            raise ValueError(msg)
+
+        if fees > 0:
+            fees = Forex(
+                currency=row.currency,
+                date=row.date,
+                amount=fees,
+                comment=f"Fees for Sell Order ({quantity:.2f} x {row.symbol})",
+            )
+        else:
+            fees = None
 
         return SellEvent(
             row.date, row.symbol, row.currency, quantity, sell_price, new_forex, fees
@@ -292,7 +309,7 @@ class CurrencyConversionEvent(ReportEvent):
         self,
         date: datetime,
         foreign_amount: decimal,
-        source_fees: Forex,
+        source_fees: Optional[Forex],
         source_currency: str,
         target_currency: str,
     ):
@@ -305,12 +322,20 @@ class CurrencyConversionEvent(ReportEvent):
     @staticmethod
     def from_df_row(row):
         row = CurrencyConversionRow.from_df_row(row)
-        source_fees = Forex(
-            currency=row.source_currency,
-            date=row.date,
-            amount=to_decimal(row.source_fees),
-            comment=f"Fees for converting {row.source_currency} to {row.target_currency}",
-        )
+        if row.source_fees < 0:
+            msg = f"For Transaction on {row.date}, fee of {row.source_fees} {row.source_currency} is negative."
+            raise ValueError(msg)
+
+        if row.source_fees > 0:
+            source_fees = Forex(
+                currency=row.source_currency,
+                date=row.date,
+                amount=to_decimal(row.source_fees),
+                comment=f"Fees for converting {row.source_currency} to {row.target_currency}",
+            )
+        else:
+            source_fees = None
+
         return CurrencyConversionEvent(
             row.date,
             to_decimal(row.foreign_amount),

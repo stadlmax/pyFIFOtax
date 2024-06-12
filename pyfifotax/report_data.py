@@ -93,7 +93,7 @@ class ReportData:
         self.awv_z10_events: list[awv.AWVEntryZ10] = []
 
         # later fill list of all events and sort according to date
-        # travering the list from earliest date to latest then allows
+        # traversing the list from earliest date to latest then allows
         # for gradually building FIFO-Queues
         self.report_events: list[ReportEvent] = []
 
@@ -146,6 +146,8 @@ class ReportData:
         used_symbols.extend(list(raw_data.dividends.symbol.unique()))
         used_symbols.extend(list(raw_data.buy_orders.symbol.unique()))
         used_symbols.extend(list(raw_data.sell_orders.symbol.unique()))
+        if raw_data.stock_splits is not None:
+            used_symbols.extend(list(raw_data.stock_splits.symbol.unique()))
         used_symbols = set(used_symbols)
 
         used_currencies = []
@@ -252,7 +254,8 @@ class ReportData:
                 if event.currency != self.domestic_currency:
                     self.held_forex[event.currency].push(event.received_net_dividend)
 
-                self.misc["Tax Withholding"].append(event.withheld_tax)
+                if event.withheld_tax is not None:
+                    self.misc["Tax Withholding"].append(event.withheld_tax)
                 self.misc["Dividend Payments"].append(event.received_dividend)
 
                 # dividends should be small enough to not trigger AWV reportings
@@ -268,7 +271,8 @@ class ReportData:
                     self.sold_forex[event.currency].extend(tmp)
 
                 self.held_shares[event.symbol].push(event.received_shares)
-                self.misc["Fees"].append(event.paid_fees)
+                if event.paid_fees is not None:
+                    self.misc["Fees"].append(event.paid_fees)
 
                 self.awv_z10_events.append(
                     awv.AWVEntryZ10Buy(
@@ -290,7 +294,8 @@ class ReportData:
                 if event.currency != self.domestic_currency:
                     self.held_forex[event.currency].push(event.received_forex)
 
-                self.misc["Fees"].append(event.paid_fees)
+                if event.paid_fees is not None:
+                    self.misc["Fees"].append(event.paid_fees)
 
                 self.awv_z10_events.append(
                     awv.AWVEntryZ10Sale(
@@ -312,14 +317,16 @@ class ReportData:
                     )
 
                 if event.source_currency == self.domestic_currency:
-                    # "buy" forex
+                    # "buy" forex, if source and target == EUR corresponds to EUR deposit
                     new_forex = FIFOForex(
                         currency=event.target_currency,
                         quantity=event.foreign_amount,
                         buy_date=event.date,
+                        source=f"Currency Conversion {self.domestic_currency} to {event.target_currency}",
                     )
                     self.held_forex[event.target_currency].push(new_forex)
-                    self.misc["Fees"].append(event.source_fees)
+                    if event.source_fees is not None:
+                        self.misc["Fees"].append(event.source_fees)
                 else:
                     # "sell" forex
                     tmp = self.held_forex[event.source_currency].pop(
@@ -328,7 +335,8 @@ class ReportData:
                         event.date,
                     )
                     self.sold_forex[event.source_currency].extend(tmp)
-                    self.misc["Fees"].append(event.source_fees)
+                    if event.source_fees is not None:
+                        self.misc["Fees"].append(event.source_fees)
 
             elif isinstance(event, StockSplitEvent):
                 if self.apply_stock_splits:
@@ -338,11 +346,21 @@ class ReportData:
                 raise RuntimeError("Unexpected Code Path reached.")
 
     def apply_exchange_rates(self):
-        apply_rates_forex_dict(self.misc, self.daily_rates, self.monthly_rates)
-        apply_rates_transact_dict(
-            self.sold_shares, self.daily_rates, self.monthly_rates
+        apply_rates_forex_dict(
+            self.misc, self.daily_rates, self.monthly_rates, self.domestic_currency
         )
-        apply_rates_transact_dict(self.sold_forex, self.daily_rates, self.monthly_rates)
+        apply_rates_transact_dict(
+            self.sold_shares,
+            self.daily_rates,
+            self.monthly_rates,
+            self.domestic_currency,
+        )
+        apply_rates_transact_dict(
+            self.sold_forex,
+            self.daily_rates,
+            self.monthly_rates,
+            self.domestic_currency,
+        )
 
     def consolidate_report(self, report_year, mode):
         if mode.lower() not in ["daily", "monthly_avg"]:
@@ -381,8 +399,8 @@ class ReportData:
         if self.legacy_mode:
             msg = "Can't create valid AWV report in legacy mode."
             msg += " This is mainly due to the new format introducing more information, e.g."
-            msg += " the difference betwen buy_price and fair_market_value for ESPP which allows"
-            msg += " to automatically calculcate your own contribution and the company bonus."
+            msg += " the difference between buy_price and fair_market_value for ESPP which allows"
+            msg += " to automatically calculate your own contribution and the company bonus."
             msg += " For AWV reports, please switch to the new format."
             warnings.warn(msg)
             return None, None
@@ -413,8 +431,8 @@ class ReportData:
         if self.legacy_mode:
             msg = "Can't create valid AWV report in legacy mode."
             msg += " This is mainly due to the new format introducing more information, e.g."
-            msg += " the difference betwen buy_price and fair_market_value for ESPP which allows"
-            msg += " to automatically calculcate your own contribution and the company bonus."
+            msg += " the difference between buy_price and fair_market_value for ESPP which allows"
+            msg += " to automatically calculate your own contribution and the company bonus."
             msg += " For AWV reports, please switch to the new format."
             warnings.warn(msg)
             return
