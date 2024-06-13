@@ -1,10 +1,16 @@
-# class for representing a foreign currency to cover dividend payments, fees, quellensteuer, etc.
-# these are separated from FIFO treatments of foreign currencies
 import math
+import decimal
+from datetime import datetime
+from decimal import Decimal
+
+from pyfifotax.utils import to_decimal
 
 
+# base class for handling currency-valued items
+# e.g. for keeping track of tax payments or
+# bookkeeping of other monetary items
 class Forex:
-    def __init__(self, currency, date, amount, comment):
+    def __init__(self, currency: str, date: datetime, amount: Decimal, comment: str):
         self.currency = currency
         self.date = date
         self.amount = amount
@@ -14,34 +20,20 @@ class Forex:
         self.amount_eur_monthly = None
         self.comment = comment
 
-    @staticmethod
-    def from_dividends_row(row):
-        gross_amount = row.amount
-        tax_amount = row.tax_withholding
-        net_amount = gross_amount - tax_amount
-        assert 0 <= tax_amount <= gross_amount, "Expected non-negative Tax Withholding!"
-        assert 0 <= net_amount <= gross_amount, "Expected non-negative Net Amount"
-        new_div = Forex(
-            currency=row.currency,
-            date=row.date,
-            amount=gross_amount,
-            comment="Dividend Payment",
-        )
-        new_tax = Forex(
-            currency=row.currency,
-            date=row.date,
-            amount=tax_amount,
-            comment="Withheld Tax on Dividends",
-        )
-        return row.symbol, new_div, new_tax
-
     def __repr__(self):
         return f"{self.currency}(Date: {self.date}, Amount: {self.amount:.2f})"
 
 
 # base class representing an arbitrary asset subject to FIFO treatment
 class FIFOObject:
-    def __init__(self, symbol, quantity, buy_date, buy_price, currency):
+    def __init__(
+        self,
+        symbol: str,
+        quantity: Decimal,
+        buy_date: datetime,
+        buy_price: Decimal,
+        currency: str,
+    ):
         self.symbol = symbol
         self.currency = currency
         self.quantity = quantity
@@ -56,49 +48,21 @@ class FIFOObject:
         self.gain_eur_daily = None
         self.gain_eur_monthly = None
 
-        # class representing a FOREX object subject to FIFO treatment
+    def total_buy_value(self):
+        return self.quantity * self.buy_price
+
+    def total_sell_value(self):
+        return self.quantity * self.sell_price
 
 
+# class representing a FOREX object subject to FIFO treatment
 class FIFOForex(FIFOObject):
-    def __init__(self, currency, quantity, buy_date, source):
+    def __init__(
+        self, currency: str, quantity: Decimal, buy_date: datetime, source: str
+    ):
         # "money" is always a single unit "money"
-        super().__init__(currency, quantity, buy_date, 1, currency)
+        super().__init__(currency, quantity, buy_date, to_decimal(1), currency)
         self.source = source  # e.g. "sale", "deposit", "dividend", etc.
-
-    @staticmethod
-    def from_dividends_row(row):
-        gross_quantity = row.amount
-        tax_quantity = row.tax_withholding
-        net_quantity = gross_quantity - tax_quantity
-        assert gross_quantity > 0, "Expected positive Gross Quantity!"
-        assert (
-            0 <= tax_quantity <= gross_quantity
-        ), "Expected non-negative Tax Withholding!"
-        assert 0 <= net_quantity <= gross_quantity, "Expected non-negative Net Quantity"
-        # if quantity > 0, all assets share the same, i.e. just duplicate them
-        new_forex = FIFOForex(
-            currency=row.currency,
-            quantity=net_quantity,
-            buy_date=row.date,
-            source="Dividend Payment",
-        )
-
-        return row.currency, new_forex
-
-    @staticmethod
-    def from_share_sale(row):
-        net_proceeds = row.sell_price * row.quantity - row.fees
-        assert (
-            net_proceeds >= 0
-        ), "Expected non-negative net proceeds from sale of shares!"
-        new_forex = FIFOForex(
-            currency=row.currency,
-            quantity=net_proceeds,
-            buy_date=row.date,
-            source="Sales Proceeds",
-        )
-
-        return row.currency, new_forex
 
     def __repr__(self):
         return f"{self.symbol}(Quantity: {self.quantity:.2f}, Buy-Date: {self.buy_date:%Y-%b-%d})"
@@ -109,30 +73,23 @@ class FIFOShare(FIFOObject):
     def __init__(self, symbol, quantity, buy_date, buy_price, currency):
         super().__init__(symbol, quantity, buy_date, buy_price, currency)
 
-    @staticmethod
-    def from_deposits_row(row):
-        if row.net_quantity <= 0:
-            raise ValueError("Expected positive quantity of assets!")
-        # if quantity > 0, all assets share the same, i.e. just duplicate them
-        new_asset = FIFOShare(
-            symbol=row.symbol,
-            quantity=row.net_quantity,
-            buy_date=row.date,
-            buy_price=row.fmv_or_buy_price,
-            currency=row.currency,
-        )
-        return row.symbol, new_asset
-
     def __repr__(self):
         return f"{self.symbol}(Quantity: {self.quantity}, Buy-Date: {self.buy_date:%Y-%b-%d}, Buy-Price: {self.buy_price:.2f} {self.currency})"
 
 
 class FIFOQueue:
     def __init__(self):
-        self.assets = []
-        self.total_quantity = 0
+        self.assets: list[FIFOObject] = []
+        self.total_quantity: decimal = to_decimal(0)
 
-    def push(self, asset):
+    def apply_split(self, shares_after_split: decimal):
+        self.total_quantity = to_decimal(0)
+        for asset in self.assets:
+            asset.quantity = asset.quantity * shares_after_split
+            asset.buy_price = asset.buy_price / shares_after_split
+            self.total_quantity = self.total_quantity + asset.quantity
+
+    def push(self, asset: FIFOObject):
         if self.is_empty():
             self.assets = [asset]
         else:
@@ -148,7 +105,12 @@ class FIFOQueue:
     def is_empty(self):
         return len(self.assets) == 0
 
-    def pop(self, quantity, sell_date):
+    def peek(self):
+        if self.is_empty():
+            raise ValueError("Cannot peek first element from an empty queue.")
+        return self.assets[0]
+
+    def pop(self, quantity: decimal, sell_price: decimal, sell_date: datetime):
         if math.isclose(quantity, 0, abs_tol=1e-10):
             return []
 
@@ -158,46 +120,56 @@ class FIFOQueue:
         if quantity > 0 and self.is_empty():
             raise ValueError(f"Cannot sell equities because there isn't any owned")
 
-        if not math.isclose(quantity, self.total_quantity) and quantity > self.total_quantity:
-            symbol = self.assets[0].symbol
-            asset_type = self.assets[0].__class__.__name__
+        if (
+            not math.isclose(quantity, self.total_quantity)
+            and quantity > self.total_quantity
+        ):
+            symbol = self.peek().symbol
+            asset_type = self.peek().__class__.__name__
             if asset_type == "FIFOShare":
                 raise ValueError(
-                    f"Cannot sell more {symbol} shares ({quantity}) than owned overall ({self.total_quantity})."
+                    f"Cannot sell more {symbol} shares ({quantity:.2f}) than owned overall ({self.total_quantity:.2f})."
                 )
             elif asset_type == "FIFOForex":
                 raise ValueError(
-                    f"Cannot convert more {symbol} ({quantity}) than owned overall ({self.total_quantity})."
+                    f"Cannot convert more {symbol} ({quantity:.2f}) than owned overall ({self.total_quantity:.2f})."
                 )
             else:
                 raise ValueError(
-                    f"Cannot pop quantity ({quantity}) larger than all quantities ({self.total_quantity}) in FIFOQueue!"
+                    f"Cannot pop quantity ({quantity:.2f}) larger than all quantities ({self.total_quantity:.2f}) in FIFOQueue!"
                 )
 
-        if self.assets[0].buy_date > sell_date:
+        if self.peek().buy_date > sell_date:
             # Relying on the fact that "assets" are sorted by date
-            symbol = self.assets[0].symbol
+            symbol = self.peek().symbol
             raise ValueError(
                 f"Cannot sell the requested {symbol} equity because on the sell transaction date "
                 f"({sell_date.strftime('%Y-%m-%d')}) the requested amount is not available"
             )
 
-        front_quantity = self.assets[0].quantity
+        front_quantity = self.peek().quantity
         if quantity < front_quantity:
-            pop_asset = from_asset(self.assets[0], quantity)
-            self.assets[0].quantity -= quantity
+            pop_asset = from_asset(self.peek(), quantity)
+            pop_asset.sell_price = sell_price
+            pop_asset.sell_date = sell_date
+            self.peek().quantity -= quantity
             self.total_quantity -= quantity
             return [pop_asset]
-        elif quantity == front_quantity:
-            self.total_quantity -= quantity
-            return [self.assets.pop(0)]
+        elif math.isclose(quantity, front_quantity):
+            self.total_quantity -= front_quantity
+            pop_asset = self.assets.pop(0)
+            pop_asset.sell_date = sell_date
+            pop_asset.sell_price = sell_price
+            return [pop_asset]
         else:
             # quantity is larger
             # pop first item, then call pop on remaining quantity
             pop_asset = self.assets.pop(0)
+            pop_asset.sell_price = sell_price
+            pop_asset.sell_date = sell_date
             self.total_quantity -= pop_asset.quantity
             remaining_quantity = quantity - pop_asset.quantity
-            return [pop_asset] + self.pop(remaining_quantity, sell_date)
+            return [pop_asset] + self.pop(remaining_quantity, sell_price, sell_date)
 
     def __repr__(self):
         return self.assets.__repr__()
