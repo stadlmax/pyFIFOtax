@@ -1,25 +1,28 @@
+from __future__ import annotations
+
 from datetime import datetime
 from dataclasses import dataclass, asdict
 import pandas as pd
+from pandas.core.series import Series
 
 from typing import Optional
 
 
 @dataclass
 class DataFrameRow:
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return asdict(self)
 
     @staticmethod
-    def from_schwab_json(json_dict):
+    def from_schwab_json(json_dict: dict) -> DataFrameRow:
         raise NotImplementedError
 
     @staticmethod
-    def empty():
+    def empty_dict() -> dict:
         raise NotImplementedError
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> DataFrameRow:
         raise NotImplementedError
 
 
@@ -33,7 +36,7 @@ class ESPPRow(DataFrameRow):
     currency: str
 
     @staticmethod
-    def from_schwab_json(json_dict):
+    def from_schwab_json(json_dict: dict) -> ESPPRow:
         symbol = json_dict["Symbol"]
         quantity = pd.to_numeric(json_dict["Quantity"])
         if not len(json_dict["TransactionDetails"]) == 1:
@@ -56,11 +59,12 @@ class ESPPRow(DataFrameRow):
         )
 
     @staticmethod
-    def empty():
-        return ESPPRow(None, None, None, None, None, None)
+    def empty_dict() -> dict:
+        tmp = ESPPRow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "").to_dict()
+        return {k: None for k in tmp.keys()}
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> ESPPRow:
         return ESPPRow(
             row.date,
             row.symbol,
@@ -81,7 +85,7 @@ class RSURow(DataFrameRow):
     currency: str
 
     @staticmethod
-    def from_schwab_lapse_json(json_dict):
+    def from_schwab_lapse_json(json_dict: dict) -> tuple[RSURow, int]:
         date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
         symbol = json_dict["Symbol"]
         gross_quantity = pd.to_numeric(json_dict["Quantity"])
@@ -112,7 +116,7 @@ class RSURow(DataFrameRow):
         )
 
     @staticmethod
-    def from_schwab_deposit_json(json_dict):
+    def from_schwab_deposit_json(json_dict: dict) -> tuple[RSURow, int]:
         date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
         symbol = json_dict["Symbol"]
         net_quantity = pd.to_numeric(json_dict["Quantity"])
@@ -143,11 +147,12 @@ class RSURow(DataFrameRow):
         )
 
     @staticmethod
-    def empty():
-        return ESPPRow(None, None, None, None, None, None)
+    def empty_dict() -> dict:
+        tmp = RSURow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "").to_dict()
+        return {k: None for k in tmp.keys()}
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> RSURow:
         return RSURow(
             row.date,
             row.symbol,
@@ -167,7 +172,7 @@ class DividendRow(DataFrameRow):
     currency: str
 
     @staticmethod
-    def from_schwab_json(json_dict):
+    def from_schwab_json(json_dict: dict) -> DividendRow:
         date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
         symbol = json_dict["Symbol"]
         amount = pd.to_numeric(json_dict["Amount"].strip("$").replace(",", ""))
@@ -181,11 +186,12 @@ class DividendRow(DataFrameRow):
         )
 
     @staticmethod
-    def empty():
-        return DividendRow(None, None, None, None, None)
+    def empty_dict() -> dict:
+        tmp = DividendRow(datetime(1, 1, 1), "", 0.0, 0.0, "").to_dict()
+        return {k: None for k in tmp.keys()}
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> DividendRow:
         return DividendRow(
             row.date, row.symbol, row.amount, row.tax_withholding, row.currency
         )
@@ -199,7 +205,7 @@ class TaxWithholdingRow(DataFrameRow):
     currency: str
 
     @staticmethod
-    def from_schwab_json(json_dict):
+    def from_schwab_json(json_dict: dict) -> TaxWithholdingRow:
         date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
         symbol = json_dict["Symbol"]
         amount = pd.to_numeric(json_dict["Amount"].strip("-$").replace(",", ""))
@@ -210,6 +216,11 @@ class TaxWithholdingRow(DataFrameRow):
             amount,
             "USD",
         )
+
+    @staticmethod
+    def empty_dict() -> dict:
+        tmp = TaxWithholdingRow(datetime(1, 1, 1), "", 0.0, "").to_dict()
+        return {k: None for k in tmp.keys()}
 
 
 @dataclass
@@ -222,7 +233,7 @@ class SellOrderRow(DataFrameRow):
     currency: str
 
     @staticmethod
-    def from_schwab_json(json_dict):
+    def from_schwab_json(json_dict: dict) -> SellOrderRow:
         date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
         symbol = json_dict["Symbol"]
         fees = pd.to_numeric(
@@ -256,11 +267,12 @@ class SellOrderRow(DataFrameRow):
         )
 
     @staticmethod
-    def empty():
-        return SellOrderRow(None, None, None, None, None, None)
+    def empty_dict() -> dict:
+        tmp = SellOrderRow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "").to_dict()
+        return {k: None for k in tmp.keys()}
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> SellOrderRow:
         return SellOrderRow(
             row.date, row.symbol, row.quantity, row.sell_price, row.fees, row.currency
         )
@@ -276,11 +288,12 @@ class BuyOrderRow(DataFrameRow):
     currency: str
 
     @staticmethod
-    def empty():
-        return BuyOrderRow(None, None, None, None, None, None)
+    def empty_dict() -> dict:
+        tmp = BuyOrderRow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "").to_dict()
+        return {k: None for k in tmp.keys()}
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> BuyOrderRow:
         return BuyOrderRow(
             row.date, row.symbol, row.quantity, row.buy_price, row.fees, row.currency
         )
@@ -295,7 +308,7 @@ class CurrencyConversionRow(DataFrameRow):
     target_currency: str
 
     @staticmethod
-    def from_schwab_json(json_dict):
+    def from_schwab_json(json_dict: dict) -> CurrencyConversionRow:
         date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
         fees = pd.to_numeric(
             json_dict["FeesAndCommissions"].strip("-$").replace(",", "")
@@ -310,11 +323,12 @@ class CurrencyConversionRow(DataFrameRow):
         )
 
     @staticmethod
-    def empty():
-        return CurrencyConversionRow(None, None, None, None, None)
+    def empty_dict() -> dict:
+        tmp = CurrencyConversionRow(datetime(1, 1, 1), 0.0, 0.0, "", "").to_dict()
+        return {k: None for k in tmp.keys()}
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> CurrencyConversionRow:
         return CurrencyConversionRow(
             row.date,
             row.foreign_amount,
@@ -331,9 +345,14 @@ class StockSplitRow(DataFrameRow):
     shares_after_split: pd.Float64Dtype
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> StockSplitRow:
         return StockSplitRow(
             date=row.date,
             symbol=row.symbol,
             shares_after_split=row.shares_after_split,
         )
+
+    @staticmethod
+    def empty_dict() -> dict:
+        tmp = StockSplitRow(datetime(1, 1, 1), "", 0.0)
+        return {k: None for k in tmp.keys()}

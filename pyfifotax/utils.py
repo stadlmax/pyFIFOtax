@@ -7,7 +7,7 @@ import decimal
 import warnings
 from dataclasses import dataclass
 from datetime import timedelta
-
+from typing import Optional
 import pandas as pd
 
 
@@ -15,14 +15,14 @@ def get_date(forex):
     return forex.date
 
 
-def round_decimal(number, precision: str):
+def round_decimal(number: decimal.Decimal, precision: str):
     return number.quantize(
         decimal.Decimal(precision),
         rounding=decimal.ROUND_HALF_UP,
     )
 
 
-def to_decimal(number):
+def to_decimal(number: float):
     return decimal.Decimal(number)
 
 
@@ -72,19 +72,15 @@ def get_reference_rates():
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
 
-def get_monthly_rate(
-    monthly_rates: pd.DataFrame, date: datetime, currency: str, domestic_currency: str
-):
-    if currency == domestic_currency:
+def get_monthly_rate(monthly_rates: pd.DataFrame, date: datetime, currency: str):
+    if currency == "EUR":
         return to_decimal(1)
 
     return to_decimal(monthly_rates[currency][date.year, date.month])
 
 
-def get_daily_rate(
-    daily_rates: pd.DataFrame, date: datetime, currency: str, domestic_currency: str
-):
-    if currency == domestic_currency:
+def get_daily_rate(daily_rates: pd.DataFrame, date: datetime, currency: str):
+    if currency == "EUR":
         return to_decimal(1)
 
     if date in daily_rates[currency]:
@@ -105,12 +101,12 @@ def get_daily_rate(
 @dataclass
 class RawData:
     rsu: pd.DataFrame
-    espp: pd.DataFrame
+    espp: Optional[pd.DataFrame]
     dividends: pd.DataFrame
     buy_orders: pd.DataFrame
     sell_orders: pd.DataFrame
     currency_conversions: pd.DataFrame
-    stock_splits: pd.DataFrame
+    stock_splits: Optional[pd.DataFrame]
 
 
 def read_data_legacy(sub_dir, file_name):
@@ -284,6 +280,9 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
 
 
 def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
+    if df.empty:
+        return
+
     if "Date" in df:
         df.sort_values("Date", inplace=True)
     elif "date" in df:
@@ -314,6 +313,9 @@ def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
 
 
 def add_total_amount_row(df):
+    if df.empty:
+        return df
+
     cols = df.columns
     amount = df["Amount [EUR]"].sum()
 
@@ -335,7 +337,10 @@ def add_total_amount_row(df):
     return df
 
 
-def add_total_gain_rows(df):
+def add_total_gain_rows(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+
     cols = df.columns
     all_gains = df["Gain [EUR]"]
     net_gains = all_gains.sum()
@@ -371,6 +376,18 @@ def add_total_gain_rows(df):
 def write_report(
     df_shares, df_forex, df_dividends, df_fees, df_taxes, sub_dir, file_name
 ):
+    if (
+        df_shares.empty
+        and df_forex.empty
+        and df_dividends.empty
+        and df_fees.empty
+        and df_taxes.empty
+    ):
+        warnings.warn(
+            "Trying to write a tax report summary without having anythign to report, abort."
+        )
+        return
+
     df_shares = df_shares.copy()
     df_forex = df_forex.copy()
     df_dividends = df_dividends.copy()
@@ -398,6 +415,12 @@ def write_report(
 
 
 def write_report_awv(df_z4, df_z10, sub_dir, file_name):
+    if df_z4.empty and df_z10.empty:
+        warnings.warn(
+            "Trying to write AWV reports despite not having any transactions to report, abort."
+        )
+        return
+
     report_path = os.path.join(sub_dir, file_name)
     with pd.ExcelWriter(
         report_path, engine="xlsxwriter", datetime_format="yyyy-mm-dd"
@@ -406,7 +429,7 @@ def write_report_awv(df_z4, df_z10, sub_dir, file_name):
         create_report_sheet("Z10", df_z10, writer)
 
 
-def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates, domestic_currency):
+def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
     for v in forex_dict.values():
         for f in v:
             # exchange rates are in 1 EUR : X FOREX
@@ -414,13 +437,11 @@ def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates, domestic_curr
                 daily_rates,
                 f.date,
                 f.currency,
-                domestic_currency,
             )
             f.amount_eur_monthly = f.amount / get_monthly_rate(
                 monthly_rates,
                 f.date,
                 f.currency,
-                domestic_currency,
             )
 
 
@@ -468,27 +489,17 @@ def forex_dict_to_df(forex_dict, mode):
     return df
 
 
-def apply_rates_transact_dict(
-    trans_dict, daily_rates, monthly_rates, domestic_currency
-):
+def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
     for v in trans_dict.values():
         for f in v:
             buy_price, sell_price = to_decimal(f.buy_price), to_decimal(f.sell_price)
 
             # exchange rates are in 1 EUR : X FOREX
-            buy_rate_daily = get_daily_rate(
-                daily_rates, f.buy_date, f.currency, domestic_currency
-            )
-            buy_rate_monthly = get_monthly_rate(
-                monthly_rates, f.buy_date, f.currency, domestic_currency
-            )
+            buy_rate_daily = get_daily_rate(daily_rates, f.buy_date, f.currency)
+            buy_rate_monthly = get_monthly_rate(monthly_rates, f.buy_date, f.currency)
 
-            sell_rate_daily = get_daily_rate(
-                daily_rates, f.sell_date, f.currency, domestic_currency
-            )
-            sell_rate_monthly = get_monthly_rate(
-                monthly_rates, f.sell_date, f.currency, domestic_currency
-            )
+            sell_rate_daily = get_daily_rate(daily_rates, f.sell_date, f.currency)
+            sell_rate_monthly = get_monthly_rate(monthly_rates, f.sell_date, f.currency)
 
             f.buy_price_eur_daily = buy_price / buy_rate_daily
             f.buy_price_eur_monthly = buy_price / buy_rate_monthly

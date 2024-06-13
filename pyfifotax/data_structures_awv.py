@@ -28,7 +28,6 @@ class AWVEntry:
             daily_rates,
             self.date,
             self.currency,
-            domestic_currency="EUR",
         )
 
 
