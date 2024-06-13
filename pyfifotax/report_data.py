@@ -40,7 +40,6 @@ class ReportData:
         sub_dir: str,
         file_name: str,
         apply_stock_splits: bool = True,
-        domestic_currency: str = "EUR",
     ):
         self.legacy_mode = False
 
@@ -81,7 +80,6 @@ class ReportData:
         # (ticker) symbols and currencies in the report
         self.symbols = None
         self.currencies = None
-        self.domestic_currency = domestic_currency
 
         self.daily_rates = None
         self.monthly_rates = None
@@ -163,7 +161,7 @@ class ReportData:
         used_currencies.extend(
             list(raw_data.currency_conversions.target_currency.unique())
         )
-        used_currencies.append(self.domestic_currency)
+        used_currencies.append("EUR")
         used_currencies = set(used_currencies)
 
         unsupported_currencies = []
@@ -251,8 +249,7 @@ class ReportData:
                 self.awv_z10_events.append(bought_shares)
 
             elif isinstance(event, DividendEvent):
-                if event.currency != self.domestic_currency:
-                    self.held_forex[event.currency].push(event.received_net_dividend)
+                self.held_forex[event.currency].push(event.received_net_dividend)
 
                 if event.withheld_tax is not None:
                     self.misc["Tax Withholding"].append(event.withheld_tax)
@@ -261,14 +258,13 @@ class ReportData:
                 # dividends should be small enough to not trigger AWV reportings
 
             elif isinstance(event, BuyEvent):
-                if event.currency != self.domestic_currency:
-                    # if not enough money, pop on FOREX Queue will fail
-                    tmp = self.held_forex[event.currency].pop(
-                        event.cost_of_shares,
-                        to_decimal(1),
-                        event.date,
-                    )
-                    self.sold_forex[event.currency].extend(tmp)
+                # if not enough money, pop on FOREX Queue will fail
+                tmp = self.held_forex[event.currency].pop(
+                    event.cost_of_shares,
+                    to_decimal(1),
+                    event.date,
+                )
+                self.sold_forex[event.currency].extend(tmp)
 
                 self.held_shares[event.symbol].push(event.received_shares)
                 if event.paid_fees is not None:
@@ -291,8 +287,7 @@ class ReportData:
                 )
                 self.sold_shares[event.symbol].extend(tmp)
 
-                if event.currency != self.domestic_currency:
-                    self.held_forex[event.currency].push(event.received_forex)
+                self.held_forex[event.currency].push(event.received_forex)
 
                 if event.paid_fees is not None:
                     self.misc["Fees"].append(event.paid_fees)
@@ -309,24 +304,41 @@ class ReportData:
 
             elif isinstance(event, CurrencyConversionEvent):
                 if not (
-                    event.source_currency == self.domestic_currency
-                    or event.target_currency == self.domestic_currency
+                    event.source_currency == event.target_currency
+                    or event.source_currency == "EUR"
+                    or event.target_currency == "EUR"
                 ):
-                    raise ValueError(
-                        "Only support currency conversions between one foreign and domestic currency!"
-                    )
+                    msg = "Only support currency conversions between one foreign and EUR or"
+                    msg += " deposits of foreign currencies (same source and target currency)!"
+                    msg += f" But got {event.source_currency} and {event.target_currency} respectively."
+                    raise ValueError(msg)
 
-                if event.source_currency == self.domestic_currency:
-                    # "buy" forex, if source and target == EUR corresponds to EUR deposit
+                if event.source_currency == event.target_currency:
+                    # simply deposit forex
+                    if event.target_currency != "EUR":
+                        warnings.warn(
+                            f"Depositing foreign currency {event.target_currency}, FIFO of future sales is based on deposit date."
+                        )
                     new_forex = FIFOForex(
                         currency=event.target_currency,
                         quantity=event.foreign_amount,
                         buy_date=event.date,
-                        source=f"Currency Conversion {self.domestic_currency} to {event.target_currency}",
+                        source=f"Deposit of {event.target_currency}",
+                    )
+                    self.held_forex[event.target_currency].push(new_forex)
+
+                elif event.source_currency == "EUR":
+                    # "buy" forex
+                    new_forex = FIFOForex(
+                        currency=event.target_currency,
+                        quantity=event.foreign_amount,
+                        buy_date=event.date,
+                        source=f"Currency Conversion EUR to {event.target_currency}",
                     )
                     self.held_forex[event.target_currency].push(new_forex)
                     if event.source_fees is not None:
                         self.misc["Fees"].append(event.source_fees)
+
                 else:
                     # "sell" forex
                     tmp = self.held_forex[event.source_currency].pop(
@@ -346,20 +358,16 @@ class ReportData:
                 raise RuntimeError("Unexpected Code Path reached.")
 
     def apply_exchange_rates(self):
-        apply_rates_forex_dict(
-            self.misc, self.daily_rates, self.monthly_rates, self.domestic_currency
-        )
+        apply_rates_forex_dict(self.misc, self.daily_rates, self.monthly_rates)
         apply_rates_transact_dict(
             self.sold_shares,
             self.daily_rates,
             self.monthly_rates,
-            self.domestic_currency,
         )
         apply_rates_transact_dict(
             self.sold_forex,
             self.daily_rates,
             self.monthly_rates,
-            self.domestic_currency,
         )
 
     def consolidate_report(self, report_year, mode):

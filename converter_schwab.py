@@ -43,7 +43,7 @@ def process_schwab_json(json_file_name, xlsx_file_name):
     schwab_rsu_lapse_events = {}
     schwab_espp_events = []
     schwab_dividend_events = []
-    schwab_buy_events = [BuyOrderRow.empty().to_dict()]
+    schwab_buy_events = [BuyOrderRow.empty_dict()]
     schwab_sell_events = []
     schwab_wire_events = []
 
@@ -134,13 +134,13 @@ def process_schwab_json(json_file_name, xlsx_file_name):
             schwab_rsu_events.append(rsu)
 
     if len(schwab_espp_events) == 0:
-        schwab_espp_events.append(ESPPRow.empty().to_dict())
+        schwab_espp_events.append(ESPPRow.empty_dict())
     if len(schwab_dividend_events) == 0:
-        schwab_dividend_events.append(DividendRow.empty().to_dict())
+        schwab_dividend_events.append(DividendRow.empty_dict())
     if len(schwab_sell_events) == 0:
-        schwab_sell_events.append(SellOrderRow.empty().to_dict())
+        schwab_sell_events.append(SellOrderRow.empty_dict())
     if len(schwab_wire_events) == 0:
-        schwab_wire_events.append(CurrencyConversionRow().empty().to_dict())
+        schwab_wire_events.append(CurrencyConversionRow().empty_dict())
 
     dfs = {
         "rsu": pd.DataFrame(schwab_rsu_events),

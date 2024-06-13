@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import decimal
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
+
+import pandas as pd
+from pandas.core.series import Series
 
 from pyfifotax.data_structures_fifo import FIFOForex, FIFOShare, Forex
 from pyfifotax.data_structures_dataframe import (
@@ -29,11 +34,11 @@ class ReportEvent:
         self.priority = priority
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> ReportEvent:
         raise NotImplementedError
 
     @classmethod
-    def from_report(cls, df):
+    def from_report(cls, df: pd.DataFrame) -> list[ReportEvent]:
         events = []
         for _, row in df.iterrows():
             events.append(cls.from_df_row(row))
@@ -49,7 +54,7 @@ class RSUEvent(ReportEvent):
         date: datetime,
         symbol: str,
         received_shares: FIFOShare,
-        withheld_shares: FIFOShare,
+        withheld_shares: Optional[FIFOShare],
     ):
         super().__init__(date, 0)
         self.symbol = symbol
@@ -57,7 +62,7 @@ class RSUEvent(ReportEvent):
         self.withheld_shares = withheld_shares
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> RSUEvent:
         row = RSURow.from_df_row(row)
         recv_share = FIFOShare(
             buy_date=row.date,
@@ -99,7 +104,7 @@ class DividendEvent(ReportEvent):
         self.withheld_tax = withheld_tax
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> DividendEvent:
         row = DividendRow.from_df_row(row)
         gross_amount = to_decimal(row.amount)
         tax_amount = to_decimal(row.tax_withholding)
@@ -143,8 +148,8 @@ class ESPPEvent(ReportEvent):
         symbol: str,
         currency: str,
         received_shares: FIFOShare,
-        contribution: decimal,
-        bonus: decimal,
+        contribution: decimal.Decimal,
+        bonus: decimal.Decimal,
     ):
         super().__init__(date, 0)
         self.symbol = symbol
@@ -155,7 +160,7 @@ class ESPPEvent(ReportEvent):
         self.received_shares = received_shares
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> ESPPEvent:
         row = ESPPRow.from_df_row(row)
         quantity = to_decimal(row.quantity)
         buy_price = to_decimal(row.buy_price)
@@ -189,7 +194,7 @@ class BuyEvent(ReportEvent):
         date: datetime,
         symbol: str,
         received_shares: FIFOShare,
-        cost_of_shares: decimal,
+        cost_of_shares: decimal.Decimal,
         paid_fees: Optional[Forex],
         currency: str,
     ):
@@ -201,7 +206,7 @@ class BuyEvent(ReportEvent):
         self.currency = currency
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> BuyEvent:
         row = BuyOrderRow.from_df_row(row)
         buy_price = to_decimal(row.buy_price)
         quantity = to_decimal(row.quantity)
@@ -250,8 +255,8 @@ class SellEvent(ReportEvent):
         date: datetime,
         symbol: str,
         currency: str,
-        quantity: decimal,
-        sell_price: decimal,
+        quantity: decimal.Decimal,
+        sell_price: decimal.Decimal,
         received_forex: FIFOForex,
         paid_fees: Optional[Forex],
     ):
@@ -264,7 +269,7 @@ class SellEvent(ReportEvent):
         self.paid_fees = paid_fees
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> SellEvent:
         row = SellOrderRow.from_df_row(row)
         sell_price = to_decimal(row.sell_price)
         quantity = to_decimal(row.quantity)
@@ -320,7 +325,7 @@ class CurrencyConversionEvent(ReportEvent):
         self.target_currency = target_currency
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> CurrencyConversionRow:
         row = CurrencyConversionRow.from_df_row(row)
         if row.source_fees < 0:
             msg = f"For Transaction on {row.date}, fee of {row.source_fees} {row.source_currency} is negative."
@@ -346,7 +351,12 @@ class CurrencyConversionEvent(ReportEvent):
 
 
 class StockSplitEvent(ReportEvent):
-    def __init__(self, date: datetime, symbol: str, shares_after_split: Decimal):
+    def __init__(
+        self,
+        date: datetime,
+        symbol: str,
+        shares_after_split: Decimal,
+    ):
         super().__init__(date, 3)
         self.symbol = symbol
         self.shares_after_split = shares_after_split
