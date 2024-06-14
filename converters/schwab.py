@@ -1,6 +1,5 @@
 import pandas as pd
 import json
-import argparse
 
 from pyfifotax.utils import create_report_sheet
 from pyfifotax.data_structures_dataframe import (
@@ -13,37 +12,6 @@ from pyfifotax.data_structures_dataframe import (
     CurrencyConversionRow,
     MoneyTransferRow,
     TaxReversalRow,
-)
-
-
-parser = argparse.ArgumentParser(
-    description="Convert Schwab JSON output to XLSX for later processing. Please review converted transactions before creating Tax/AWV reports!"
-)
-parser.add_argument(
-    "-i",
-    "--json",
-    dest="json_filename",
-    type=str,
-    required=True,
-    help="Schwab JSON History",
-)
-parser.add_argument(
-    "-o",
-    "--xlsx",
-    dest="xlsx_filename",
-    type=str,
-    required=True,
-    help="Output XLSX file",
-)
-parser.add_argument(
-    "--forex_transfer_as_exchange",
-    action="store_true",
-    help=(
-        "If set, treats outgoing wire transfers as currency exchange to EUR."
-        " This can be helpful to simplify the reporting of currency conversions"
-        " if this is the only style of transfer. Please check the actual date"
-        " of conversion and for correctness in general!"
-    ),
 )
 
 
@@ -176,12 +144,7 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
             writer.sheets[k].set_column(1, 20, 16)
 
 
-def main(args):
+def convert(args):
     process_schwab_json(
-        args.json_filename, args.xlsx_filename, args.forex_transfer_as_exchange
+        args.input_filename, args.xlsx_filename, args.forex_transfer_as_exchange
     )
-
-
-if __name__ == "__main__":
-    args = parser.parse_args()
-    main(args)
