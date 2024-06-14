@@ -1,53 +1,16 @@
-import argparse
 import csv
 import os
+from datetime import date
 
 import pandas as pd
 from babel.numbers import parse_decimal
 
-import datetime
 
-
-parser = argparse.ArgumentParser(
-    description="Convert Interactive Brokers and Schwab CSV output to XLSX for later processing"
-)
-parser.add_argument(
-    "type",
-    type=str,
-    choices=["ibkr", "schwab"],
-    help="Type of the CSV format for input",
-)
-parser.add_argument(
-    "-i",
-    "--csv",
-    dest="csv_filename",
-    type=str,
-    required=True,
-    help="CSV file from Interactive Brokers or Schwab",
-)
-parser.add_argument(
-    "-o",
-    "--xlsx",
-    dest="xlsx_filename",
-    type=str,
-    required=True,
-    help="Output XLSX file",
-)
-parser.add_argument(
-    "--ticker-to-isin",
-    dest="isin_replace",
-    type=bool,
-    default=False,
-    action=argparse.BooleanOptionalAction,
-    help="Replace tickers in the 'symbol' column to ISIN (only for IBKR)",
-)
-
-
-class Converter:
-    def __init__(self, args):
-        self.csv_filename = args.csv_filename
-        self.xlsx_filename = args.xlsx_filename
-        self.isin_replace = args.isin_replace
+class CSVConverter:
+    def __init__(self, arguments):
+        self._csv_filename = arguments.input_filename
+        self._xlsx_filename = arguments.xlsx_filename
+        self._isin_replace = arguments.isin_replace
 
         self.df_deposits = pd.DataFrame(
             columns=[
@@ -93,7 +56,7 @@ class Converter:
         self.processed_instrument_information = 0
 
     def process_csv(self):
-        with open(self.csv_filename, encoding="utf-8-sig") as csv_file:
+        with open(self._csv_filename, encoding="utf-8-sig") as csv_file:
             csv_reader = csv.reader(csv_file)
             for row in csv_reader:
                 self.row = row
@@ -116,7 +79,7 @@ class Converter:
             print(f"Replaced symbols: {self.processed_instrument_information}")
 
     def write_to_xlsx(self):
-        with pd.ExcelWriter(self.xlsx_filename, engine="xlsxwriter") as writer:
+        with pd.ExcelWriter(self._xlsx_filename, engine="xlsxwriter") as writer:
             self._write_sheet("deposits", self.df_deposits, writer)
             self._write_sheet("dividends", self.df_dividends, writer)
             self._write_sheet("sales", self.df_sales, writer)
@@ -124,7 +87,7 @@ class Converter:
                 "currency conversion to EUR", self.df_forex_to_eur, writer
             )
 
-        print(f"Results were written to '{os.path.basename(self.xlsx_filename)}'")
+        print(f"Results were written to '{os.path.basename(self._xlsx_filename)}'")
 
     @staticmethod
     def _write_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
@@ -149,7 +112,7 @@ class Converter:
         raise NotImplementedError()
 
 
-class IbkrConverter(Converter):
+class IbkrConverter(CSVConverter):
     def __init__(self, args):
         super().__init__(args)
 
@@ -203,7 +166,7 @@ class IbkrConverter(Converter):
         quantity = self._parse_number(self.row[8])
         df = self.df_deposits if quantity > 0 else self.df_sales
         df.loc[len(df.index)] = [
-            datetime.date.fromisoformat(self.row[6].split(",")[0]),  # Date
+            date.fromisoformat(self.row[6].split(",")[0]),  # Date
             self.row[5],  # Symbol
             abs(quantity),  # Quantity
             self._parse_number(self.row[9]),  # T. Price
@@ -257,7 +220,7 @@ class IbkrConverter(Converter):
             return False
 
         self.df_forex_to_eur.loc[len(self.df_forex_to_eur.index)] = [
-            datetime.date.fromisoformat(self.row[6].split(",")[0]),  # Date
+            date.fromisoformat(self.row[6].split(",")[0]),  # Date
             abs(self._parse_number(self.row[11])),  # Proceeds
             abs(
                 self._parse_number(self.row[12]) * self._parse_number(self.row[9])
@@ -312,7 +275,7 @@ class IbkrConverter(Converter):
 
         symbol = self.row[4].split(" ")[0]
         self.df_dividends.loc[len(self.df_dividends.index)] = [
-            datetime.date.fromisoformat(self.row[3]),  # Date
+            date.fromisoformat(self.row[3]),  # Date
             symbol,
             self._parse_number(self.row[5]),  # Amount
             0,  # Tax withholding
@@ -368,22 +331,7 @@ class IbkrConverter(Converter):
         product = self.row[4]
 
         for df in [self.df_deposits, self.df_sales, self.df_dividends]:
-            if self.isin_replace:
+            if self._isin_replace:
                 df.loc[df["symbol"] == symbol, "symbol"] = isin
 
             df.loc[df["Product"] == symbol, "Product"] = product
-
-
-def main(args):
-    if args.type == "ibkr":
-        converter = IbkrConverter(args)
-    else:
-        raise ValueError("This type of converter is not recognised")
-
-    converter.process_csv()
-    converter.write_to_xlsx()
-
-
-if __name__ == "__main__":
-    args = parser.parse_args()
-    main(args)

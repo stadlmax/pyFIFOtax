@@ -62,33 +62,36 @@ If you include the optional flag `--all`, reports for all calendar years and bot
 ## AWV Reports
 In an updated version of this code, Z4 and Z10 entries intended for reporting transactions exceeding 12_500 EUR to the Bunsdesbank are also created automatically. You will find the corresponding sheets "Z4" and "Z10" in `awv_report_<report_year>.xlsx`. Note: for now this is only supported for any transaction involving NVDA shares denoted in USD.
 
-# Conversion from Schwab-JSON exports
-Export the JSON in the desired date range from History > Transactions > Export and select the JSON format.
+# Conversion from broker export
 
-After downloading the history, run `converter_json.py`.
+Various conversion utilities are available to convert the output of the broker into a separate XLSX sheet.
+
+Always inspect the results manually and copy only those values into the final spreadsheet which are verified.
+
+Parameters:
+
 ```
+convert.py [-h] -i INPUT_FILENAME -o XLSX_FILENAME [--ticker-to-isin | --no-ticker-to-isin] [--forex_transfer_as_exchange] {ibkr,schwab}
+
+Convert Interactive Brokers CSV and Schwab JSON output to XLSX for later processing
+
+positional arguments:
+  {ibkr,schwab}         Used broker
+
 options:
   -h, --help            show this help message and exit
-  -i CSV_FILENAME, --csv CSV_FILENAME
-                        CSV file from Interactive Brokers or Schwab
-  -o XLSX_FILENAME, --xlsx XLSX_FILENAME
+  -i INPUT_FILENAME, --input INPUT_FILENAME
+                        Input file (CSV file from Interactive Brokers or JSON from Schwab)
+  -o XLSX_FILENAME, --output XLSX_FILENAME
                         Output XLSX file
+  --ticker-to-isin, --no-ticker-to-isin
+                        Replace tickers in the 'symbol' column to ISIN (only for IBKR)
   --forex_transfer_as_exchange
-                        If set, treats outgoing wire transfers as currency exchange to EUR. This can be helpful to simplify the reporting of currency
-                        conversions if this is the only style of transfer. Please check the actual date of conversion and for correctness in general!
+                        If set, treats outgoing wire transfers as currency exchange to EUR. This can be helpful to simplify the reporting of currency conversions if this is the only style
+                        of transfer. Please check the actual date of conversion and for correctness in general! (Only for Schwab)
 ```
 
-Always inspect the results manually and copy only those values into the final spreadsheet which are verified!
-
-After inspection and curation of your actual list of transactions, you can run the usual report creation scripts.
-
-Note the following limitations:
-* To simplify things, any wire transfer is assumed to be an outgoing transfer to an account denoted in EUR and thus implicitly is assumed to be a currency exchange. If this is not the case or if the date of the transfer does not match the settlement date, please delete or correct the corresponding entries.
-* Schwab CSV converter was not tested with a fully upgraded account
-* Buy orders are currently not supported.
-
-
-## Interactive Brokers [potentially legacy]
+## Interactive Brokers
 
 The following has to be done once on the IBKR web interface:
 
@@ -110,6 +113,19 @@ Note the following limitations:
 
 * IBKR export format is very extensive, it's possible that some rows are not processed. Always verify the results
 * Tax withholding calculation is not supported for dividends. Withheld tax will always be zero.
+
+## Schwab
+
+Export the JSON in the desired date range from History > Transactions > Export and select the JSON format, then start the `converter.py` script with argument `schwab`.
+
+Always inspect the results manually and copy only those values into the final spreadsheet which are verified!
+
+After inspection and curation of your actual list of transactions, you can run the usual report creation scripts.
+
+Note the following limitations:
+* To simplify things, any wire transfer is assumed to be an outgoing transfer to an account denoted in EUR and thus implicitly is assumed to be a currency exchange. If this is not the case or if the date of the transfer does not match the settlement date, please delete or correct the corresponding entries.
+* Schwab CSV converter was not tested with a fully upgraded account
+* Buy orders are currently not supported.
 
 # Further Use
 Since all the reporting is done in a very simple and quite naive Python implementation, one could easily use it to augment the data in other ways. `notebook_example.ipynb` for instance shows you how to retrieve certain results as `pd.DataFrame`.
