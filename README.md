@@ -71,25 +71,37 @@ Always inspect the results manually and copy only those values into the final sp
 Parameters:
 
 ```
-convert.py [-h] -i INPUT_FILENAME -o XLSX_FILENAME [--ticker-to-isin | --no-ticker-to-isin] [--forex_transfer_as_exchange] {ibkr,schwab}
+convert.py [-h] -i INPUT_FILENAME -o XLSX_FILENAME [--degiro-account-csv DEGIRO_ACCOUNT_CSV] [--ticker-to-isin | --no-ticker-to-isin] [--forex_transfer_as_exchange]
+                  {degiro,ibkr,schwab}
 
-Convert Interactive Brokers CSV and Schwab JSON output to XLSX for later processing
+Convert DEGIRO and Interactive Brokers CSV and Schwab JSON output to XLSX for later processing
 
 positional arguments:
-  {ibkr,schwab}         Used broker
+  {degiro,ibkr,schwab}  Used broker
 
 options:
   -h, --help            show this help message and exit
   -i INPUT_FILENAME, --input INPUT_FILENAME
-                        Input file (CSV file from Interactive Brokers or JSON from Schwab)
+                        Input file (CSV file from DEGIRO and Interactive Brokers or JSON from Schwab)
   -o XLSX_FILENAME, --output XLSX_FILENAME
                         Output XLSX file
+  --degiro-account-csv DEGIRO_ACCOUNT_CSV
+                        Account.csv input file (only required for DEGIRO)
   --ticker-to-isin, --no-ticker-to-isin
                         Replace tickers in the 'symbol' column to ISIN (only for IBKR)
   --forex_transfer_as_exchange
                         If set, treats outgoing wire transfers as currency exchange to EUR. This can be helpful to simplify the reporting of currency conversions if this is the only style
                         of transfer. Please check the actual date of conversion and for correctness in general! (Only for Schwab)
 ```
+
+## DEGIRO
+
+Export two CSV files from the German version of DEGIRO. Other localisations are not supported currently.
+
+1. Inbox > Transactions > Select the desired timeframe > Export > CSV
+2. Inbox > Account statement > Select the desired timeframe > Export > CSV
+
+Give the first CSV as `--input`, the second CSV as `--degiro-account-csv` to the converter script.
 
 ## Interactive Brokers
 
