@@ -73,7 +73,7 @@ class IbkrConverter(CSVConverter):
         return True
 
     def _process_forex(self):
-        if self.row[0] != "Trades" or self.row[3] != "Forex":
+        if self.row[0] != "Trades" or self.row[3] not in ["Forex", "Asset Category"]:
             return
 
         if self._check_forex_header():
@@ -96,6 +96,13 @@ class IbkrConverter(CSVConverter):
                 "Exchange",
                 "Quantity",
                 "T. Price",
+                "",
+                "Proceeds",
+                "Comm in EUR",
+                "",
+                "",
+                "MTM in EUR",
+                "Code",
             ]
 
             if self.row != expected_headers:
