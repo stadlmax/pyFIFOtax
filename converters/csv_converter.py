@@ -124,7 +124,7 @@ class CSVConverter:
             self.df_forex,
             self.df_money_transfers,
         ]:
-            df.sort_values("date", inplace=True)
+            df.sort_values("date", inplace=True, kind="stable")
 
         print(f"Total processed trades: {self.processed_trades}")
         print(f"Total processed dividends: {self.processed_dividends}")
@@ -146,7 +146,7 @@ class CSVConverter:
 
     @staticmethod
     def _write_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
-        df.to_excel(writer, sheet_name=name, index=False, float_format="%.2f")
+        df.to_excel(writer, sheet_name=name, index=False, float_format="%.3f")
         worksheet = writer.sheets[name]
         worksheet.autofit()  # Adjust column widths to their maximum lengths
 
