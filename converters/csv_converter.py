@@ -161,6 +161,15 @@ class CSVConverter:
             f"a wrong type of CSV was downloaded. {header.title()} header is incorrect"
         )
 
+    def _check_header(self, check_header: bool, expected_headers: list, header_type: str):
+        if check_header:
+            if not self.row == expected_headers:
+                self._wrong_header(header_type)
+
+            return True
+
+        return False
+
     def _process_trades(self):
         raise NotImplementedError()
 

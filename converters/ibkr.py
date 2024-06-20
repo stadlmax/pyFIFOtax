@@ -25,33 +25,27 @@ class IbkrConverter(CSVConverter):
             self.processed_trades += 1
 
     def _check_trades_header(self):
-        if self.row[1] == "Header" and self.row[10] == "C. Price":
-            expected_headers = [
-                "Trades",
-                "Header",
-                "DataDiscriminator",
-                "Asset Category",
-                "Currency",
-                "Symbol",
-                "Date/Time",
-                "Exchange",
-                "Quantity",
-                "T. Price",
-                "C. Price",
-                "Proceeds",
-                "Comm/Fee",
-                "Basis",
-                "Realized P/L",
-                "MTM P/L",
-                "Code",
-            ]
-
-            if self.row != expected_headers:
-                self._wrong_header("trade")
-
-            return True
-
-        return False
+        condition = self.row[1] == "Header" and self.row[10] == "C. Price"
+        expected_headers = [
+            "Trades",
+            "Header",
+            "DataDiscriminator",
+            "Asset Category",
+            "Currency",
+            "Symbol",
+            "Date/Time",
+            "Exchange",
+            "Quantity",
+            "T. Price",
+            "C. Price",
+            "Proceeds",
+            "Comm/Fee",
+            "Basis",
+            "Realized P/L",
+            "MTM P/L",
+            "Code",
+        ]
+        return self._check_header(condition, expected_headers, "trade")
 
     def _process_trade_row(self):
         if self.row[2] != "Order":
@@ -84,33 +78,27 @@ class IbkrConverter(CSVConverter):
             self.processed_forex += 1
 
     def _check_forex_header(self):
-        if self.row[1] == "Header" and self.row[10] != "C. Price":
-            expected_headers = [
-                "Trades",
-                "Header",
-                "DataDiscriminator",
-                "Asset Category",
-                "Currency",
-                "Symbol",
-                "Date/Time",
-                "Exchange",
-                "Quantity",
-                "T. Price",
-                "",
-                "Proceeds",
-                "Comm in EUR",
-                "",
-                "",
-                "MTM in EUR",
-                "Code",
-            ]
-
-            if self.row != expected_headers:
-                self._wrong_header("forex")
-
-            return True
-
-        return False
+        condition = self.row[1] == "Header" and self.row[10] != "C. Price"
+        expected_headers = [
+            "Trades",
+            "Header",
+            "DataDiscriminator",
+            "Asset Category",
+            "Currency",
+            "Symbol",
+            "Date/Time",
+            "Exchange",
+            "Quantity",
+            "T. Price",
+            "",
+            "Proceeds",
+            "Comm in EUR",
+            "",
+            "",
+            "MTM in EUR",
+            "Code",
+        ]
+        return self._check_header(condition, expected_headers, "forex")
 
     def _process_forex_row(self):
         if self.row[2] != "Order":
@@ -246,14 +234,9 @@ class IbkrConverter(CSVConverter):
         self._process_withholding_tax_row()
 
     def _check_withholding_tax_header(self):
-        if self.row[1] == "Header":
-            expected_headers = ["Withholding Tax", "Header", "Currency", "Date", "Description", "Amount", "Code"]
-            if not self.row == expected_headers:
-                self._wrong_header("Withholding Tax")
-
-            return True
-
-        return False
+        condition = self.row[1] == "Header"
+        expected_headers = ["Withholding Tax", "Header", "Currency", "Date", "Description", "Amount", "Code"]
+        return self._check_header(condition, expected_headers, "Withholding Tax")
 
     def _process_withholding_tax_row(self):
         if self.row[2].startswith("Total"):
@@ -276,14 +259,9 @@ class IbkrConverter(CSVConverter):
             self.processed_dividends += 1
 
     def _check_interest_header(self):
-        if self.row[1] == "Header":
-            expected_headers = ["Interest", "Header", "Currency", "Date", "Description", "Amount"]
-            if not self.row == expected_headers:
-                self._wrong_header("Interest")
-
-            return True
-
-        return False
+        condition = self.row[1] == "Header"
+        expected_headers = ["Interest", "Header", "Currency", "Date", "Description", "Amount"]
+        return self._check_header(condition, expected_headers, "Interest")
 
     def _process_interest_row(self):
         if self.row[2].startswith("Total"):
