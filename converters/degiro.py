@@ -46,34 +46,28 @@ class DeGiroConverter(CSVConverter):
             self.processed_trades += 1
 
     def _check_trades_header(self):
-        if self.row[0] in ["Datum", "Date"]:
-            expected_headers = [
-                "Datum",
-                "Uhrzeit",
-                "Produkt",
-                "ISIN",
-                "Referenzbörse",
-                "Ausführungsort",
-                "Anzahl", "Kurs",
-                "",
-                "Wert in Lokalwährung",
-                "",
-                "Wert",
-                "",
-                "Wechselkurs",
-                "Transaktionsgebühren",
-                "",
-                "Gesamt",
-                "",
-                "Order-ID",
-            ]
-
-            if self.row != expected_headers:
-                self._wrong_header("Transactions")
-
-            return True
-
-        return False
+        condition = self.row[0] in ["Datum", "Date"]
+        expected_headers = [
+            "Datum",
+            "Uhrzeit",
+            "Produkt",
+            "ISIN",
+            "Referenzbörse",
+            "Ausführungsort",
+            "Anzahl", "Kurs",
+            "",
+            "Wert in Lokalwährung",
+            "",
+            "Wert",
+            "",
+            "Wechselkurs",
+            "Transaktionsgebühren",
+            "",
+            "Gesamt",
+            "",
+            "Order-ID",
+        ]
+        return self._check_header(condition, expected_headers, "Transactions")
 
     def _process_trade_row(self):
         # Sometimes the "Product" continues in a second row, which doesn't contain a date
