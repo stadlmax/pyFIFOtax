@@ -27,7 +27,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--ticker-to-isin",
-    dest="isin_replace",
+    dest="ticker_to_isin",
     type=bool,
     default=False,
     action=argparse.BooleanOptionalAction,
@@ -47,7 +47,7 @@ parser.add_argument(
 
 
 def main(arguments):
-    if args.type == "ibkr":
+    if arguments.type == "ibkr":
         from converters.ibkr import IbkrConverter
         converter = IbkrConverter(arguments)
         converter.process_csv()
