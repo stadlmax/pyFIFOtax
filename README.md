@@ -38,31 +38,9 @@ The generated report will contain several sheets with details of the transaction
 ## AWV Reports
 In an updated version of this code, Z4 and Z10 entries intended for reporting transactions exceeding 12_500 EUR to the Bunsdesbank are also created automatically. You will find the corresponding sheets "Z4" and "Z10" in `awv_report_<report_year>.xlsx`. Note: for now this is only supported for any transaction involving NVDA shares denoted in USD.
 
-# Converson from Schwab-JSON exports
-Export the JSON in the desired date range from History > Transactions > Export and select the JSON format.
+# Conversion from broker export
 
-After downloading the history, run `converter_json.py`.
-```
-options:
-  -h, --help            show this help message and exit
-  -i CSV_FILENAME, --csv CSV_FILENAME
-                        CSV file from Interactive Brokers or Schwab
-  -o XLSX_FILENAME, --xlsx XLSX_FILENAME
-                        Output XLSX file
-```
-
-Always inspect the results manually and copy only those values into the final spreadsheet which are verified!
-
-After inspection and curation of your actual list of transactions, you can run the usual report creation scripts.
-
-Note the following limitations:
-* To simplify things, any wire transfer is assumed to be an outgoing transfer to an account denoted in EUR and thus implicitly is assumed to be a currency exchange. If this is not the case or if the date of the transfer does not match the settlement date, please delete or correct the corresponding entries.
-* Schwab CSV converter was not tested with a fully upgraded account
-* Buy orders are currently not supported.
-
-# Conversion from CSV export [potentially legacy]
-
-Various conversion utilities are available to convert the CSV output of the broker into a separate XLSX sheet.
+Various conversion utilities are available to convert the output of the broker into a separate XLSX sheet.
 
 Always inspect the results manually and copy only those values into the final spreadsheet which are verified.
 
@@ -70,19 +48,30 @@ Parameters:
 
 ```
 positional arguments:
-  {ibkr,schwab}         Type of the CSV format for input
+  {degiro,ibkr,schwab}  Used broker
 
 options:
   -h, --help            show this help message and exit
-  -i CSV_FILENAME, --csv CSV_FILENAME
-                        CSV file from Interactive Brokers or Schwab
-  -o XLSX_FILENAME, --xlsx XLSX_FILENAME
+  -i INPUT_FILENAME, --input INPUT_FILENAME
+                        Input file (CSV file from DEGIRO and Interactive Brokers or JSON from Schwab)
+  -o XLSX_FILENAME, --output XLSX_FILENAME
                         Output XLSX file
-  --ticker-to-isin, --no-ticker-to-isin
+  --degiro-account-csv DEGIRO_ACCOUNT_CSV
+                        Account.csv input file (only required for DEGIRO)
+  --ibkr-ticker-to-isin, --no-ibkr-ticker-to-isin
                         Replace tickers in the 'symbol' column to ISIN (only for IBKR)
 ```
 
-## Interactive Brokers [potentially legacy]
+## DEGIRO
+
+Export two CSV files from the German version of DEGIRO. Other localisations are not supported currently.
+
+1. Inbox > Transactions > Select the desired timeframe > Export > CSV
+2. Inbox > Account statement > Select the desired timeframe > Export > CSV
+
+Give the first CSV as `--input`, the second CSV as `--degiro-account-csv` to the converter script.
+
+## Interactive Brokers
 
 The following has to be done once on the IBKR web interface:
 
@@ -98,30 +87,33 @@ Export the CSV file by running this newly created custom statement in the desire
 
 Always thoroughly examine the result.
 
-By default, the "symbol" column contains the ticker name. If you'd like to see the ISIN there instead, use the `--ticker-to-isin` flag.
+By default, the "symbol" column contains the ticker name. If you'd like to see the ISIN there instead, use the `--ibkr-ticker-to-isin` flag.
 
 Note the following limitations:
 
 * IBKR export format is very extensive, it's possible that some rows are not processed. Always verify the results
 * Tax withholding calculation is not supported for dividends. Withheld tax will always be zero.
 
-## Schwab [potentially legacy]
+## Schwab
 
-Export the CSV in the desired date range from History > Transactions > Export.
+Export the JSON in the desired date range from History > Transactions > Export and select the JSON format, then start the `converter.py` script with argument `schwab`.
 
-Start the `converter.py` script with argument `schwab`.
+Always inspect the results manually and copy only those values into the final spreadsheet which are verified!
+
+After inspection and curation of your actual list of transactions, you can run the usual report creation scripts.
 
 Note the following limitations:
-
+* To simplify things, any wire transfer is assumed to be an outgoing transfer to an account denoted in EUR and thus implicitly is assumed to be a currency exchange. If this is not the case or if the date of the transfer does not match the settlement date, please delete or correct the corresponding entries.
 * Schwab CSV converter was not tested with a fully upgraded account
-* The converter was not tested with more than one dividend and tax withholding row
-* Currency conversions (if Schwab does it at all) are not supported
+* Buy orders are currently not supported.
 
 # Further Use
 Since all the reporting is done in a very simple and quite naive Python implementation, one could easily use it to augment the data in other ways. `notebook_example.ipynb` for instance shows you how to retrieve certain results as `pd.DataFrame`.
 
 # Requirements
-- pandas
+- python >= 3.9
+- babel
+- openpyxl
 - XlsxWriter
 
 # Testing

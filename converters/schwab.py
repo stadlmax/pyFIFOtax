@@ -1,8 +1,6 @@
-import os
 import pandas as pd
 import warnings
 import json
-import argparse
 
 from pyfifotax.utils import create_report_sheet
 from pyfifotax.data_structures_dataframe import (
@@ -13,27 +11,6 @@ from pyfifotax.data_structures_dataframe import (
     DividendRow,
     TaxWithholdingRow,
     CurrencyConversionRow,
-)
-
-
-parser = argparse.ArgumentParser(
-    description="Convert Schwab JSON output to XLSX for later processing. Please review converted transactions before creating Tax/AWV reports!"
-)
-parser.add_argument(
-    "-i",
-    "--json",
-    dest="json_filename",
-    type=str,
-    required=True,
-    help="Schwab JSON History",
-)
-parser.add_argument(
-    "-o",
-    "--xlsx",
-    dest="xlsx_filename",
-    type=str,
-    required=True,
-    help="Output XLSX file",
 )
 
 
@@ -160,10 +137,5 @@ def process_schwab_json(json_file_name, xlsx_file_name):
             writer.sheets[k].set_column(1, 20, 16)
 
 
-def main(args):
-    process_schwab_json(args.json_filename, args.xlsx_filename)
-
-
-if __name__ == "__main__":
-    args = parser.parse_args()
-    main(args)
+def convert(args):
+    process_schwab_json(args.input_filename, args.xlsx_filename)
