@@ -106,11 +106,8 @@ def process_schwab_json(json_file_name, xlsx_file_name):
                     schwab_dividend_events.append(tmp)
 
             else:
-                act = e["Action"]
-                des = e["Description"]
-                sym = e["Symbol"]
-                date = e["Date"]
-                warnings.warn(f"skipping {act} on {date} ({sym}: {des})")
+                # do nothing on unused fields
+                pass
 
     if len(schwab_rsu_lapse_events) != len(schwab_rsu_deposit_events):
         raise RuntimeError(
@@ -140,7 +137,7 @@ def process_schwab_json(json_file_name, xlsx_file_name):
     if len(schwab_sell_events) == 0:
         schwab_sell_events.append(SellOrderRow.empty_dict())
     if len(schwab_wire_events) == 0:
-        schwab_wire_events.append(CurrencyConversionRow().empty_dict())
+        schwab_wire_events.append(CurrencyConversionRow.empty_dict())
 
     dfs = {
         "rsu": pd.DataFrame(schwab_rsu_events),

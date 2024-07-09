@@ -34,6 +34,7 @@ class ESPPRow(DataFrameRow):
     fair_market_value: pd.Float64Dtype
     quantity: pd.Float64Dtype
     currency: str
+    comment: str
 
     @staticmethod
     def from_schwab_json(json_dict: dict) -> ESPPRow:
@@ -56,11 +57,12 @@ class ESPPRow(DataFrameRow):
             fair_market_value,
             quantity,
             "USD",
+            "Automated Schwab Import (JSON)",
         )
 
     @staticmethod
     def empty_dict() -> dict:
-        tmp = ESPPRow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "").to_dict()
+        tmp = ESPPRow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "", "").to_dict()
         return {k: None for k in tmp.keys()}
 
     @staticmethod
@@ -72,6 +74,7 @@ class ESPPRow(DataFrameRow):
             row.fair_market_value,
             row.quantity,
             row.currency,
+            row.comment,
         )
 
 
@@ -83,6 +86,7 @@ class RSURow(DataFrameRow):
     net_quantity: pd.Float64Dtype
     fair_market_value: pd.Float64Dtype
     currency: str
+    comment: str
 
     @staticmethod
     def from_schwab_lapse_json(json_dict: dict) -> tuple[RSURow, int]:
@@ -111,6 +115,7 @@ class RSURow(DataFrameRow):
                 net_quantity,
                 fair_market_value,
                 "USD",
+                f"Automated Schwab Import (JSON, Award ID {award_id})",
             ),
             award_id,
         )
@@ -142,13 +147,14 @@ class RSURow(DataFrameRow):
                 net_quantity,
                 fair_market_value,
                 "USD",
+                f"Automated Schwab Import (JSON, Award ID {award_id})",
             ),
             award_id,
         )
 
     @staticmethod
     def empty_dict() -> dict:
-        tmp = RSURow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "").to_dict()
+        tmp = RSURow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "", "").to_dict()
         return {k: None for k in tmp.keys()}
 
     @staticmethod
@@ -160,6 +166,7 @@ class RSURow(DataFrameRow):
             row.net_quantity,
             row.fair_market_value,
             row.currency,
+            row.comment,
         )
 
 
@@ -170,6 +177,7 @@ class DividendRow(DataFrameRow):
     amount: pd.Float64Dtype
     tax_withholding: pd.Float64Dtype
     currency: str
+    comment: str
 
     @staticmethod
     def from_schwab_json(json_dict: dict) -> DividendRow:
@@ -183,17 +191,23 @@ class DividendRow(DataFrameRow):
             amount,
             pd.to_numeric(0),
             "USD",
+            "Automated Schwab Import (JSON)",
         )
 
     @staticmethod
     def empty_dict() -> dict:
-        tmp = DividendRow(datetime(1, 1, 1), "", 0.0, 0.0, "").to_dict()
+        tmp = DividendRow(datetime(1, 1, 1), "", 0.0, 0.0, "", "").to_dict()
         return {k: None for k in tmp.keys()}
 
     @staticmethod
     def from_df_row(row: Series) -> DividendRow:
         return DividendRow(
-            row.date, row.symbol, row.amount, row.tax_withholding, row.currency
+            row.date,
+            row.symbol,
+            row.amount,
+            row.tax_withholding,
+            row.currency,
+            row.comment,
         )
 
 
@@ -231,6 +245,7 @@ class SellOrderRow(DataFrameRow):
     sell_price: pd.Float64Dtype
     fees: pd.Float64Dtype
     currency: str
+    comment: str
 
     @staticmethod
     def from_schwab_json(json_dict: dict) -> SellOrderRow:
@@ -264,17 +279,24 @@ class SellOrderRow(DataFrameRow):
             sale_price,
             fees,
             "USD",
+            "Automated Schwab Import (JSON)",
         )
 
     @staticmethod
     def empty_dict() -> dict:
-        tmp = SellOrderRow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "").to_dict()
+        tmp = SellOrderRow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "", "").to_dict()
         return {k: None for k in tmp.keys()}
 
     @staticmethod
     def from_df_row(row: Series) -> SellOrderRow:
         return SellOrderRow(
-            row.date, row.symbol, row.quantity, row.sell_price, row.fees, row.currency
+            row.date,
+            row.symbol,
+            row.quantity,
+            row.sell_price,
+            row.fees,
+            row.currency,
+            row.comment,
         )
 
 
@@ -286,16 +308,23 @@ class BuyOrderRow(DataFrameRow):
     buy_price: pd.Float64Dtype
     fees: pd.Float64Dtype
     currency: str
+    comment: str
 
     @staticmethod
     def empty_dict() -> dict:
-        tmp = BuyOrderRow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "").to_dict()
+        tmp = BuyOrderRow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "", "").to_dict()
         return {k: None for k in tmp.keys()}
 
     @staticmethod
     def from_df_row(row: Series) -> BuyOrderRow:
         return BuyOrderRow(
-            row.date, row.symbol, row.quantity, row.buy_price, row.fees, row.currency
+            row.date,
+            row.symbol,
+            row.quantity,
+            row.buy_price,
+            row.fees,
+            row.currency,
+            row.comment,
         )
 
 
@@ -306,6 +335,7 @@ class CurrencyConversionRow(DataFrameRow):
     source_fees: pd.Float64Dtype
     source_currency: str
     target_currency: str
+    comment: str
 
     @staticmethod
     def from_schwab_json(json_dict: dict) -> CurrencyConversionRow:
@@ -320,11 +350,12 @@ class CurrencyConversionRow(DataFrameRow):
             fees,
             "USD",
             "EUR",
+            "Automated Schwab Import (JSON, Currency Conversion from Wire Transfer, check correctness!)",
         )
 
     @staticmethod
     def empty_dict() -> dict:
-        tmp = CurrencyConversionRow(datetime(1, 1, 1), 0.0, 0.0, "", "").to_dict()
+        tmp = CurrencyConversionRow(datetime(1, 1, 1), 0.0, 0.0, "", "", "").to_dict()
         return {k: None for k in tmp.keys()}
 
     @staticmethod
@@ -335,6 +366,7 @@ class CurrencyConversionRow(DataFrameRow):
             row.source_fees,
             row.source_currency,
             row.target_currency,
+            row.comment,
         )
 
 

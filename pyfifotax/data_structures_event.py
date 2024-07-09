@@ -27,10 +27,10 @@ class ReportEvent:
         # add priority to make sure that buy/deposit transactions
         # are processed before sell transactions
         # espp/rsu deposit/dividend: prio 0
-        # buy: prio 1
-        # sell: prio 2
-        # stocksplit: 3 (at the end as assumed after market-close)
-        # currency conversions: 4
+        # sell: prio 1
+        # currency conversions: 2
+        # buy: prio 3
+        # stocksplit: 4 (at the end as assumed after market-close)
         self.priority = priority
 
     @staticmethod
@@ -109,14 +109,10 @@ class DividendEvent(ReportEvent):
         gross_amount = to_decimal(row.amount)
         tax_amount = to_decimal(row.tax_withholding)
         net_amount = gross_amount - tax_amount
-        if gross_amount < 0:
-            raise ValueError(
-                f"Expected Capital Gains to be non-negative but got {net_amount}."
-            )
-        if not (0 <= tax_amount <= gross_amount):
-            raise ValueError(
-                f"Expected Tax Withholding {tax_amount} to be non-negative and smaller than the capital gains {gross_amount}."
-            )
+
+        # TODO eventually add back check for tax_amount
+        # dividends can be negative in negative-interest-rate times
+
         div = Forex(
             currency=row.currency,
             date=row.date,
@@ -129,7 +125,7 @@ class DividendEvent(ReportEvent):
             quantity=net_amount,
             source=f"Received Net Dividend Payment ({row.symbol})",
         )
-        if tax_amount > 0:
+        if tax_amount > to_decimal(0.0):
             tax = Forex(
                 currency=row.currency,
                 date=row.date,
@@ -198,7 +194,7 @@ class BuyEvent(ReportEvent):
         paid_fees: Optional[Forex],
         currency: str,
     ):
-        super().__init__(date, 1)
+        super().__init__(date, 3)
         self.symbol = symbol
         self.received_shares = received_shares
         self.cost_of_shares = cost_of_shares
@@ -220,11 +216,11 @@ class BuyEvent(ReportEvent):
             currency=row.currency,
         )
 
-        if fees < 0:
+        if fees < to_decimal(0.0):
             msg = f"For Transaction on {row.date}, fee of {fees} {row.currency} is negative."
             raise ValueError(msg)
 
-        if fees > 0:
+        if fees > to_decimal(0.0):
             paid_fees = Forex(
                 currency=row.currency,
                 date=row.date,
@@ -260,7 +256,7 @@ class SellEvent(ReportEvent):
         received_forex: FIFOForex,
         paid_fees: Optional[Forex],
     ):
-        super().__init__(date, 2)
+        super().__init__(date, 1)
         self.symbol = symbol
         self.currency = currency
         self.quantity = quantity
@@ -280,7 +276,7 @@ class SellEvent(ReportEvent):
         # TODO: check if rounding mode matches schwab
         net_proceeds = sell_price * quantity - fees
         net_proceeds = round_decimal(net_proceeds, precision="0.01")
-        if not (net_proceeds >= 0):
+        if not (net_proceeds >= to_decimal(0.0)):
             raise ValueError(
                 f"Expected non-negative net proceeds from sale of shares but got {net_proceeds}"
             )
@@ -290,11 +286,11 @@ class SellEvent(ReportEvent):
             buy_date=row.date,
             source="Sales Proceeds",
         )
-        if fees < 0:
+        if fees < to_decimal(0.0):
             msg = f"For Transaction on {row.date}, fee of {fees} {row.currency} is negative."
             raise ValueError(msg)
 
-        if fees > 0:
+        if fees > to_decimal(0.0):
             fees = Forex(
                 currency=row.currency,
                 date=row.date,
@@ -318,20 +314,20 @@ class CurrencyConversionEvent(ReportEvent):
         source_currency: str,
         target_currency: str,
     ):
-        super().__init__(date, 4)
+        super().__init__(date, 2)
         self.foreign_amount = foreign_amount
         self.source_fees = source_fees
         self.source_currency = source_currency
         self.target_currency = target_currency
 
     @staticmethod
-    def from_df_row(row: Series) -> CurrencyConversionRow:
+    def from_df_row(row: Series) -> CurrencyConversionEvent:
         row = CurrencyConversionRow.from_df_row(row)
-        if row.source_fees < 0:
+        if row.source_fees < 0.0:
             msg = f"For Transaction on {row.date}, fee of {row.source_fees} {row.source_currency} is negative."
             raise ValueError(msg)
 
-        if row.source_fees > 0:
+        if row.source_fees > 0.0:
             source_fees = Forex(
                 currency=row.source_currency,
                 date=row.date,
@@ -357,12 +353,12 @@ class StockSplitEvent(ReportEvent):
         symbol: str,
         shares_after_split: Decimal,
     ):
-        super().__init__(date, 3)
+        super().__init__(date, 4)
         self.symbol = symbol
         self.shares_after_split = shares_after_split
 
     @staticmethod
-    def from_df_row(row):
+    def from_df_row(row: Series) -> StockSplitEvent:
         row = StockSplitRow.from_df_row(row)
         return StockSplitEvent(
             date=row.date,

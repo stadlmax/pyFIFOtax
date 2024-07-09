@@ -13,9 +13,9 @@ For the reference rates, you might have to download a newer version depending on
 NOTE: an update extends the functionality of the reporting scripts (including support for stock splits and automated suggestions for AWV reporting). As this breaks the way input data is defined, these things are only available once you have created a new list of transactions following this new format, see e.g. `examples/transactions.xlsx` as an example for this new format. The old format is still available. However, it won't produce AWV reports and it can't handle stock splits.
 
 # Stock Splits
-Over time, many company will announce stock splits to reduce the price of their shares. Typical splits mean that for one existing share, you will receive a certain number of additional shares, e.g. 1, 3 ,or 9 in 2:1, 4:1, or 10:1 splits. NVDA, however, itself also had a "odd" splits in the past, e.g. a 3:2 split, i.e. you received one additional share for two existing ones or half a share for one existing share. Technically, also reverse splits are possible, e.g. for two existing shares you will have one share after the split.
+Over time, many companies will announce stock splits to reduce the price of their shares. Typical splits mean that for one existing share, you will receive a certain number of additional shares, e.g. 1, 3 ,or 9 in 2:1, 4:1, or 10:1 splits. NVDA, however, itself also had "odd" splits in the past, e.g. a 3:2 split, i.e. you received one additional share for two existing ones or half a share for one existing share. Technically, also reverse splits are possible, e.g. for two existing shares you will have one share after the split.
 
-To keep track of these splits, fill out the sheet `stock_splits` in your transaction spreadsheet by adding the symbol of asset for which the split should be tracked, the date, and the number of shares after the split. For instance, a 4:1 split is denoted as 4.0, a 3:2 split would be denoted as 1.5. Leaving this file empty (but keeping the header) will lead to no splits applied. `ReportData` also has has now an additional boolen flag to toggle this behavior (`apply_stock_splits`) even if the file is filled with some content. 
+To keep track of these splits, fill out the sheet `stock_splits` in your transaction spreadsheet by adding the symbol of asset for which the split should be tracked, the date, and the number of shares after the split. For instance, a 4:1 split is denoted as 4.0, a 3:2 split would be denoted as 1.5. Leaving this file empty (but keeping the header) will lead to no splits applied. `ReportData` also has now an additional boolen flag to toggle this behavior (`apply_stock_splits`) even if the file is filled with some content. 
 
 A stock split is assumed to take place after hours. I.e. if a stock split takes place on the 4th of August, any shares bought on that day will be assumed to split the next day. Any shares sold on this day, are seen as not having undergone the split.
 
@@ -38,7 +38,7 @@ The generated report will contain several sheets with details of the transaction
 ## AWV Reports
 In an updated version of this code, Z4 and Z10 entries intended for reporting transactions exceeding 12_500 EUR to the Bunsdesbank are also created automatically. You will find the corresponding sheets "Z4" and "Z10" in `awv_report_<report_year>.xlsx`. Note: for now this is only supported for any transaction involving NVDA shares denoted in USD.
 
-# Converson from Schwab-JSON exports
+# Conversion from Schwab-JSON exports
 Export the JSON in the desired date range from History > Transactions > Export and select the JSON format.
 
 After downloading the history, run `converter_json.py`.
@@ -60,27 +60,6 @@ Note the following limitations:
 * Schwab CSV converter was not tested with a fully upgraded account
 * Buy orders are currently not supported.
 
-# Conversion from CSV export [potentially legacy]
-
-Various conversion utilities are available to convert the CSV output of the broker into a separate XLSX sheet.
-
-Always inspect the results manually and copy only those values into the final spreadsheet which are verified.
-
-Parameters:
-
-```
-positional arguments:
-  {ibkr,schwab}         Type of the CSV format for input
-
-options:
-  -h, --help            show this help message and exit
-  -i CSV_FILENAME, --csv CSV_FILENAME
-                        CSV file from Interactive Brokers or Schwab
-  -o XLSX_FILENAME, --xlsx XLSX_FILENAME
-                        Output XLSX file
-  --ticker-to-isin, --no-ticker-to-isin
-                        Replace tickers in the 'symbol' column to ISIN (only for IBKR)
-```
 
 ## Interactive Brokers [potentially legacy]
 
