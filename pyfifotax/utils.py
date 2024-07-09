@@ -130,6 +130,7 @@ def read_data_legacy(sub_dir, file_name):
         df_buy_orders = df_deposits.copy()
 
         df_deposits["gross_quantity"] = df_deposits["net_quantity"]
+        df_deposits["comment"] = ""
         df_deposits.rename(
             mapper={"fmv_or_buy_price": "fair_market_value"},
             axis="columns",
@@ -139,6 +140,7 @@ def read_data_legacy(sub_dir, file_name):
         df_deposits.drop(labels=["fees"], axis="columns", inplace=True)
 
         df_buy_orders = df_buy_orders[df_buy_orders.fees != 0]
+        df_buy_orders["comment"] = ""
         df_buy_orders.rename(
             mapper={"fmv_or_buy_price": "buy_price", "net_quantity": "quantity"},
             axis="columns",
@@ -146,7 +148,9 @@ def read_data_legacy(sub_dir, file_name):
         )
 
         df_dividends = pd.read_excel(xls, sheet_name="dividends", parse_dates=["date"])
+        df_dividends["comment"] = ""
         df_sell_orders = pd.read_excel(xls, sheet_name="sales", parse_dates=["date"])
+        df_sell_orders["comment"] = ""
 
         df_currency_conversions = pd.read_excel(
             xls, sheet_name=forex_sheet, parse_dates=["date"]
@@ -163,6 +167,7 @@ def read_data_legacy(sub_dir, file_name):
         df_currency_conversions.drop(
             labels=["net_amount"], axis="columns", inplace=True
         )
+        df_currency_conversions["comment"] = ""
 
         df_stock_splits = None
         df_espp = None
@@ -384,7 +389,7 @@ def write_report(
         and df_taxes.empty
     ):
         warnings.warn(
-            "Trying to write a tax report summary without having anythign to report, abort."
+            "Tax report was not created as there were no transactions to report."
         )
         return
 
@@ -417,7 +422,7 @@ def write_report(
 def write_report_awv(df_z4, df_z10, sub_dir, file_name):
     if df_z4.empty and df_z10.empty:
         warnings.warn(
-            "Trying to write AWV reports despite not having any transactions to report, abort."
+            "AWV reports didn't get created as there were no transactions to report."
         )
         return
 

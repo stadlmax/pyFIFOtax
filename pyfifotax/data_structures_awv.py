@@ -12,6 +12,7 @@ class AWVEntry:
         # modify when regulations change
         self.awv_threshold_eur = to_decimal(12_500)
         self.value = None
+        self.value_eur = None
         self.date = None
         self.currency = None
 

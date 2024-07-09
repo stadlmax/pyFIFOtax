@@ -211,7 +211,8 @@ class ReportData:
                     date=event.date,
                     symbol=event.symbol,
                     currency=event.received_shares.currency,
-                    quantity=event.received_shares.quantity,
+                    quantity=event.received_shares.quantity
+                    + event.withheld_shares.quantity,
                     value=event.received_shares.total_buy_value()
                     + event.withheld_shares.total_buy_value(),
                 )
