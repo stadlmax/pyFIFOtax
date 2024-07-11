@@ -36,9 +36,19 @@ parser.add_argument(
     required=True,
     help="Output XLSX file",
 )
+parser.add_argument(
+    "--forex_transfer_as_exchange",
+    action="store_true",
+    help=(
+        "If set, treats outgoing wire transfers as currency exchange to EUR."
+        " This can be helpful to simplify the reporting of currency conversions"
+        " if this is the only style of transfer. Please check the actual date"
+        " of conversion and for correctness in general!"
+    ),
+)
 
 
-def process_schwab_json(json_file_name, xlsx_file_name):
+def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchange):
     schwab_rsu_events = []
     schwab_rsu_deposit_events = {}
     schwab_rsu_lapse_events = {}
@@ -47,6 +57,7 @@ def process_schwab_json(json_file_name, xlsx_file_name):
     schwab_buy_events = [BuyOrderRow.empty_dict()]
     schwab_sell_events = []
     schwab_wire_events = []
+    schwab_currency_movement_events = []
 
     with open(json_file_name) as f:
         d = json.load(f)
@@ -91,9 +102,15 @@ def process_schwab_json(json_file_name, xlsx_file_name):
                 e["Action"] == "Wire Transfer"
                 and e["Description"] == "Cash Disbursement"
             ):
-                schwab_wire_events.append(
-                    CurrencyConversionRow.from_schwab_json(e).to_dict()
-                )
+                if forex_transfer_as_exchange:
+                    schwab_wire_events.append(
+                        CurrencyConversionRow.from_schwab_json(e).to_dict()
+                    )
+
+                else:
+                    schwab_currency_movement_events.append(
+                        CurrencyMovementRow.from_schwab_json(e).to_dict()
+                    )
 
             elif e["Action"] == "Tax Withholding" and e["Description"] == "Debit":
                 tmp = TaxWithholdingRow.from_schwab_json(e)
@@ -139,8 +156,8 @@ def process_schwab_json(json_file_name, xlsx_file_name):
         schwab_sell_events.append(SellOrderRow.empty_dict())
     if len(schwab_wire_events) == 0:
         schwab_wire_events.append(CurrencyConversionRow.empty_dict())
-
-    schwab_currency_movement_events = [CurrencyMovementRow.empty_dict()]
+    if len(schwab_currency_movement_events) == 0:
+        schwab_currency_movement_events.append(CurrencyMovementRow.empty_dict())
 
     dfs = {
         "rsu": pd.DataFrame(schwab_rsu_events),
@@ -162,7 +179,9 @@ def process_schwab_json(json_file_name, xlsx_file_name):
 
 
 def main(args):
-    process_schwab_json(args.json_filename, args.xlsx_filename)
+    process_schwab_json(
+        args.json_filename, args.xlsx_filename, args.forex_transfer_as_exchange
+    )
 
 
 if __name__ == "__main__":

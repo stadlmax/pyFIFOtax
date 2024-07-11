@@ -390,13 +390,14 @@ class CurrencyMovementRow(DataFrameRow):
     date: datetime
     buy_date: datetime
     amount: np.float64
+    fees: np.float64
     currency: str
     comment: str
 
     @staticmethod
     def default_dict() -> dict:
         return CurrencyMovementRow(
-            datetime(1, 1, 1), datetime(1, 1, 1), np.float64(0), "", ""
+            datetime(1, 1, 1), datetime(1, 1, 1), np.float64(0), np.float64(0), "", ""
         ).to_dict()
 
     @staticmethod
@@ -409,10 +410,27 @@ class CurrencyMovementRow(DataFrameRow):
         )
         return CurrencyMovementRow(
             row.date,
-            row.buy_date,
+            buy_date,
             row.amount,
+            row.fees,
             row.currency,
             row.comment,
+        )
+
+    @staticmethod
+    def from_schwab_json(json_dict: dict) -> CurrencyMovementRow:
+        date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
+        fees = pd.to_numeric(
+            json_dict["FeesAndCommissions"].strip("-$").replace(",", "")
+        )
+        foreign_amount = pd.to_numeric(json_dict["Amount"].strip("-$").replace(",", ""))
+        return CurrencyMovementRow(
+            date,
+            datetime(999, 12, 31),
+            -foreign_amount,
+            fees,
+            "USD",
+            "Automated Schwab Import (JSON, Wire Transfer)",
         )
 
 
