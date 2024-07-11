@@ -3,6 +3,7 @@ import warnings
 import pandas as pd
 
 import pyfifotax.data_structures_awv as awv
+from pyfifotax.data_structures_dataframe import StockSplitRow
 from pyfifotax.data_structures_event import (
     ReportEvent,
     RSUEvent,
@@ -10,6 +11,7 @@ from pyfifotax.data_structures_event import (
     BuyEvent,
     SellEvent,
     CurrencyConversionEvent,
+    CurrencyMovementEvent,
     DividendEvent,
     StockSplitEvent,
 )
@@ -60,12 +62,12 @@ class ReportData:
         # (which is trivial as shares is assumed to be ordered)
         # correctly based on its construction, a sell order will also
         # update the underlying asset object with the corresponding "sell_price"
-        self.held_shares = {}
-        self.sold_shares = {}
+        self.held_shares: dict[str, FIFOQueue] = {}
+        self.sold_shares: dict[str, list] = {}
 
         # list of foreign currencies: dividend payments and sell orders
-        self.held_forex = {}
-        self.sold_forex = {}
+        self.held_forex: dict[str, FIFOQueue] = {}
+        self.sold_forex: dict[str, list] = {}
         # Besides maintaining a list of ingoing and outgoing streams
         # of "foreign" currencies, we keep separate lists
         # - fees (pot. Werbungskosten),
@@ -75,7 +77,11 @@ class ReportData:
         # follow a FIFO principle. Besides e.g. gains on dividends,
         # one - in addition - also might have to consider gains/losses from
         # holding foreign currencies, which is covered by the "forex" above.
-        self.misc = {"Fees": [], "Dividend Payments": [], "Tax Withholding": []}
+        self.misc: dict[str, list] = {
+            "Fees": [],
+            "Dividend Payments": [],
+            "Tax Withholding": [],
+        }
 
         # (ticker) symbols and currencies in the report
         self.symbols = None
@@ -104,17 +110,17 @@ class ReportData:
 
         # read in raw data and initialize buffers based on these
         self.read_raw_data()
-        # sort all events in ascending order based on their date
+        # sort all events in ascending order based on their date and priority
         self.report_events.sort(key=lambda event: (event.date, event.priority))
 
         # process report events generated from loading raw data
         self.process_report_events()
 
         # apply rates to awv events
-        for e in self.awv_z4_events:
-            e.apply_daily_rate(self.daily_rates)
-        for e in self.awv_z10_events:
-            e.apply_daily_rate(self.daily_rates)
+        for z4 in self.awv_z4_events:
+            z4.apply_daily_rate(self.daily_rates)
+        for z10 in self.awv_z10_events:
+            z10.apply_daily_rate(self.daily_rates)
 
     def read_raw_data(self):
         try:
@@ -134,7 +140,9 @@ class ReportData:
 
         if self.apply_stock_splits:
             with pd.ExcelFile(self.stock_split_file_path) as xls:
-                df_stock_splits = pd.read_excel(xls, parse_dates=["date"])
+                dtypes = StockSplitRow.type_dict()
+                dtypes["date"] = None
+                df_stock_splits = pd.read_excel(xls, parse_dates=["date"], dtype=dtypes)
             raw_data.stock_splits = df_stock_splits
 
         used_symbols = []
@@ -144,14 +152,9 @@ class ReportData:
         used_symbols.extend(list(raw_data.dividends.symbol.unique()))
         used_symbols.extend(list(raw_data.buy_orders.symbol.unique()))
         used_symbols.extend(list(raw_data.sell_orders.symbol.unique()))
-        if raw_data.stock_splits is not None:
-            used_symbols.extend(list(raw_data.stock_splits.symbol.unique()))
-        used_symbols = set(used_symbols)
 
         used_currencies = []
         used_currencies.extend(list(raw_data.rsu.currency.unique()))
-        if not self.legacy_mode:
-            used_currencies.extend(list(raw_data.espp.currency.unique()))
         used_currencies.extend(list(raw_data.dividends.currency.unique()))
         used_currencies.extend(list(raw_data.buy_orders.currency.unique()))
         used_currencies.extend(list(raw_data.sell_orders.currency.unique()))
@@ -162,6 +165,14 @@ class ReportData:
             list(raw_data.currency_conversions.target_currency.unique())
         )
         used_currencies.append("EUR")
+
+        if not self.legacy_mode:
+            if self.apply_stock_splits:
+                used_symbols.extend(list(raw_data.stock_splits.symbol.unique()))
+            used_currencies.extend(list(raw_data.espp.currency.unique()))
+            used_currencies.extend(list(raw_data.currency_movements.currency.unique()))
+
+        used_symbols = set(used_symbols)
         used_currencies = set(used_currencies)
 
         unsupported_currencies = []
@@ -193,6 +204,9 @@ class ReportData:
                 StockSplitEvent.from_report(raw_data.stock_splits)
             )
         if not self.legacy_mode:
+            self.report_events.extend(
+                CurrencyMovementEvent.from_report(raw_data.currency_movements)
+            )
             self.report_events.extend(ESPPEvent.from_report(raw_data.espp))
 
     def process_report_events(self):
@@ -303,32 +317,33 @@ class ReportData:
                     )
                 )
 
+            elif isinstance(event, CurrencyMovementEvent):
+                if event.amount > 0:
+                    new_forex = FIFOForex(
+                        currency=event.currency,
+                        quantity=event.amount,
+                        buy_date=event.buy_date,
+                        source=f"Currency Deposit",
+                    )
+                    self.held_forex[event.currency].push(new_forex)
+
+                else:
+                    # just pop, don't handle currency
+                    self.held_forex[event.currency].pop(
+                        -event.amount,
+                        to_decimal(1),
+                        event.date,
+                    )
+
             elif isinstance(event, CurrencyConversionEvent):
                 if not (
-                    event.source_currency == event.target_currency
-                    or event.source_currency == "EUR"
-                    or event.target_currency == "EUR"
+                    event.source_currency == "EUR" or event.target_currency == "EUR"
                 ):
-                    msg = "Only support currency conversions between one foreign and EUR or"
-                    msg += " deposits of foreign currencies (same source and target currency)!"
-                    msg += f" But got {event.source_currency} and {event.target_currency} respectively."
+                    msg = "Only support currency conversions between one foreign currency and EUR"
+                    msg += f" but got {event.source_currency} and {event.target_currency} respectively."
                     raise ValueError(msg)
 
-                if event.source_currency == event.target_currency:
-                    # simply deposit forex
-                    if event.target_currency != "EUR":
-                        warnings.warn(
-                            f"Depositing foreign currency {event.target_currency}, FIFO of future sales is based on deposit date."
-                        )
-                    new_forex = FIFOForex(
-                        currency=event.target_currency,
-                        quantity=event.foreign_amount,
-                        buy_date=event.date,
-                        source=f"Deposit of {event.target_currency}",
-                    )
-                    self.held_forex[event.target_currency].push(new_forex)
-
-                elif event.source_currency == "EUR":
+                if event.source_currency == "EUR":
                     # "buy" forex
                     new_forex = FIFOForex(
                         currency=event.target_currency,
@@ -356,6 +371,7 @@ class ReportData:
                     self.held_shares[event.symbol].apply_split(event.shares_after_split)
 
             else:
+                print(event)
                 raise RuntimeError("Unexpected Code Path reached.")
 
     def apply_exchange_rates(self):

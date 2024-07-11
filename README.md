@@ -24,6 +24,12 @@ NOTE: If you manually kept track of stock splits in the past in your list of tra
 # ESPP and RSUs
 Shares coming from ESPPs or RSU lapses can be treated differently. With ESPP often being sold directly after they are bought, it could actually reduce the reporting burden as one wouldn't expect capital gains from these transactions. If users want to do so, they should indicate the separate treatment by noting down the shares with a different symbol in all relevant transactions, e.g. by using `NVDA-ESPP` and `NVDA-RSU` instead of only `NVDA`. The reporting then will separate them in different calculations. 
 
+# Currencies, FOREX, and Deposits
+The reporting tool will create FIFO queues of Foreign Currencies (i.e. not EUR) and a balance of EUR. These are also used e.g. for stock transactions and implicit currency events. To ensure that e.g. buy transactions are properly tracked based on initial balances and that currency related events are properly tracked after withdrawals, the tool can work on a provided list of currency movements in EUR or a foreign currency.
+- for deposits, indicate the initial buy date of the foreign currency
+- for withdrawals, set the amount as negative value indicating the outflow of money
+- buy_date only has to be set for deposits of foreign currency, not for movements of EUR and not for withdrawals in general
+
 # Report Generation
 `create_report.py` will generate the report for you. Usage:
 ```

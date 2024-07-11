@@ -37,7 +37,7 @@ class AWVEntryZ4(AWVEntry):
         self,
         date: datetime,
         purpose: str,
-        value: decimal,
+        value: decimal.Decimal,
         currency: str,
         is_incoming: bool,
         is_nvidia: bool,
@@ -87,8 +87,8 @@ class AWVEntryZ10(AWVEntry):
         self,
         date: datetime,
         comment: str,
-        quantity: decimal,
-        value: decimal,
+        quantity: decimal.Decimal,
+        value: decimal.Decimal,
         currency: str,
         is_incoming: bool,
         is_nvidia: bool,
@@ -144,8 +144,8 @@ class AWVEntryZ10RSUDeposit(AWVEntryZ10):
         self,
         date: datetime,
         symbol: str,
-        quantity: decimal,
-        value: decimal,
+        quantity: decimal.Decimal,
+        value: decimal.Decimal,
         currency: str,
     ):
         is_nvidia = "NVDA" in symbol
@@ -169,8 +169,8 @@ class AWVEntryZ10RSUTaxWithholding(AWVEntryZ10):
         self,
         date: datetime,
         symbol: str,
-        quantity: decimal,
-        value: decimal,
+        quantity: decimal.Decimal,
+        value: decimal.Decimal,
         currency: str,
     ):
         is_nvidia = "NVDA" in symbol
@@ -194,8 +194,8 @@ class AWVEntryZ10Sale(AWVEntryZ10):
         self,
         date: datetime,
         symbol: str,
-        quantity: decimal,
-        value: decimal,
+        quantity: decimal.Decimal,
+        value: decimal.Decimal,
         currency: str,
     ):
         is_nvidia = "NVDA" in symbol
@@ -219,8 +219,8 @@ class AWVEntryZ10Buy(AWVEntryZ10):
         self,
         date: datetime,
         symbol: str,
-        quantity: decimal,
-        value: decimal,
+        quantity: decimal.Decimal,
+        value: decimal.Decimal,
         currency: str,
     ):
         is_nvidia = "NVDA" in symbol
@@ -244,8 +244,8 @@ class AWVEntryZ10ESPPDeposit(AWVEntryZ10):
         self,
         date: datetime,
         symbol: str,
-        quantity: decimal,
-        value: decimal,
+        quantity: decimal.Decimal,
+        value: decimal.Decimal,
         currency: str,
     ):
         is_nvidia = "NVDA" in symbol
@@ -265,7 +265,9 @@ class AWVEntryZ10ESPPDeposit(AWVEntryZ10):
 
 
 class AWVEntryZ4ESPPBonus(AWVEntryZ4):
-    def __init__(self, date: datetime, symbol: str, value: decimal, currency: str):
+    def __init__(
+        self, date: datetime, symbol: str, value: decimal.Decimal, currency: str
+    ):
         is_nvidia = "NVDA" in symbol
         super().__init__(
             date=date,
@@ -282,7 +284,9 @@ class AWVEntryZ4ESPPBonus(AWVEntryZ4):
 
 
 class AWVEntryZ4RSUBonus(AWVEntryZ4):
-    def __init__(self, date: datetime, symbol: str, value: decimal, currency: str):
+    def __init__(
+        self, date: datetime, symbol: str, value: decimal.Decimal, currency: str
+    ):
         is_nvidia = "NVDA" in symbol
         super().__init__(
             date=date,

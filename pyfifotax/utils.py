@@ -7,8 +7,19 @@ import decimal
 import warnings
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Optional
+from typing import Optional, Union
 import pandas as pd
+import numpy as np
+
+from pyfifotax.data_structures_dataframe import (
+    ESPPRow,
+    RSURow,
+    BuyOrderRow,
+    SellOrderRow,
+    DividendRow,
+    CurrencyConversionRow,
+    CurrencyMovementRow,
+)
 
 
 def get_date(forex):
@@ -22,8 +33,10 @@ def round_decimal(number: decimal.Decimal, precision: str):
     )
 
 
-def to_decimal(number: float):
-    return decimal.Decimal(number)
+def to_decimal(number: Union[float, np.float64, None]):
+    if number is None:
+        raise ValueError("Can't convert None to decimal.")
+    return decimal.Decimal(float(number))
 
 
 def sum_decimal(series: pd.Series):
@@ -72,14 +85,16 @@ def get_reference_rates():
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
 
-def get_monthly_rate(monthly_rates: pd.DataFrame, date: datetime, currency: str):
+def get_monthly_rate(
+    monthly_rates: pd.DataFrame, date: datetime.datetime, currency: str
+):
     if currency == "EUR":
         return to_decimal(1)
 
-    return to_decimal(monthly_rates[currency][date.year, date.month])
+    return to_decimal(monthly_rates[currency][date.year, date.month].item())
 
 
-def get_daily_rate(daily_rates: pd.DataFrame, date: datetime, currency: str):
+def get_daily_rate(daily_rates: pd.DataFrame, date: datetime.datetime, currency: str):
     if currency == "EUR":
         return to_decimal(1)
 
@@ -106,6 +121,7 @@ class RawData:
     buy_orders: pd.DataFrame
     sell_orders: pd.DataFrame
     currency_conversions: pd.DataFrame
+    currency_movements: pd.DataFrame
     stock_splits: Optional[pd.DataFrame]
 
 
@@ -126,7 +142,17 @@ def read_data_legacy(sub_dir, file_name):
                 DeprecationWarning,
             )
 
-        df_deposits = pd.read_excel(xls, sheet_name="deposits", parse_dates=["date"])
+        dtypes = {
+            "date": None,
+            "symbol": str,
+            "net_quantity": np.float64,
+            "fmv_or_buy_price": np.float64,
+            "fees": np.float64,
+            "currency": str,
+        }
+        df_deposits = pd.read_excel(
+            xls, sheet_name="deposits", parse_dates=["date"], dtype=dtypes
+        )
         df_buy_orders = df_deposits.copy()
 
         df_deposits["gross_quantity"] = df_deposits["net_quantity"]
@@ -147,13 +173,39 @@ def read_data_legacy(sub_dir, file_name):
             inplace=True,
         )
 
-        df_dividends = pd.read_excel(xls, sheet_name="dividends", parse_dates=["date"])
+        dtypes = {
+            "date": None,
+            "symbol": str,
+            "amount": np.float64,
+            "tax_withholding": np.float64,
+            "currency": str,
+        }
+        df_dividends = pd.read_excel(
+            xls, sheet_name="dividends", parse_dates=["date"], dtype=dtypes
+        )
         df_dividends["comment"] = ""
-        df_sell_orders = pd.read_excel(xls, sheet_name="sales", parse_dates=["date"])
+
+        dtypes = {
+            "date": None,
+            "symbol": str,
+            "quantity": np.float64,
+            "sell_price": np.float64,
+            "fees": np.float64,
+            "currency": str,
+        }
+        df_sell_orders = pd.read_excel(
+            xls, sheet_name="sales", parse_dates=["date"], dtype=dtypes
+        )
         df_sell_orders["comment"] = ""
 
+        dtypes = {
+            "date": None,
+            "net_amount": np.float64,
+            "fees": np.float64,
+            "currency": str,
+        }
         df_currency_conversions = pd.read_excel(
-            xls, sheet_name=forex_sheet, parse_dates=["date"]
+            xls, sheet_name=forex_sheet, parse_dates=["date"], dtype=dtypes
         )
         df_currency_conversions["target_currency"] = "EUR"
         df_currency_conversions["foreign_amount"] = (
@@ -171,6 +223,7 @@ def read_data_legacy(sub_dir, file_name):
 
         df_stock_splits = None
         df_espp = None
+        df_currency_movements = None
 
     return RawData(
         df_deposits,
@@ -179,6 +232,7 @@ def read_data_legacy(sub_dir, file_name):
         df_buy_orders,
         df_sell_orders,
         df_currency_conversions,
+        df_currency_movements,
         df_stock_splits,
     )
 
@@ -188,22 +242,50 @@ def read_data(sub_dir, file_name):
     # sort them to ensure that they are in chronological order
     file_path = os.path.join(sub_dir, file_name)
     with pd.ExcelFile(file_path) as xls:
-        df_rsu = pd.read_excel(xls, sheet_name="rsu", parse_dates=["date"])
-        df_dividends = pd.read_excel(xls, sheet_name="dividends", parse_dates=["date"])
+        dtypes = RSURow.type_dict()
+        df_rsu = pd.read_excel(
+            xls, sheet_name="rsu", parse_dates=["date"], dtype=dtypes
+        )
+
+        dtypes = DividendRow.type_dict()
+        dtypes["date"] = None
+        df_dividends = pd.read_excel(
+            xls, sheet_name="dividends", parse_dates=["date"], dtype=dtypes
+        )
+
+        dtypes = BuyOrderRow.type_dict()
+        dtypes["date"] = None
         df_buy_orders = pd.read_excel(
-            xls, sheet_name="buy_orders", parse_dates=["date"]
+            xls, sheet_name="buy_orders", parse_dates=["date"], dtype=dtypes
         )
+
+        dtypes = SellOrderRow.type_dict()
+        dtypes["date"] = None
         df_sell_orders = pd.read_excel(
-            xls, sheet_name="sell_orders", parse_dates=["date"]
+            xls, sheet_name="sell_orders", parse_dates=["date"], dtype=dtypes
         )
+
+        dtypes = CurrencyConversionRow.type_dict()
+        dtypes["date"] = None
         df_currency_conversions = pd.read_excel(
-            xls, sheet_name="currency_conversions", parse_dates=["date"]
+            xls, sheet_name="currency_conversions", parse_dates=["date"], dtype=dtypes
         )
         df_stock_splits = None  # set later
+
+        dtypes = ESPPRow.type_dict()
+        dtypes["date"] = None
         df_espp = pd.read_excel(
+            xls, sheet_name="espp", parse_dates=["date"], dtype=dtypes
+        )
+
+        dtypes = CurrencyMovementRow.type_dict()
+        dtypes["date"] = None
+        dtypes["buy_date"] = None
+        df_currency_movements = pd.read_excel(
             xls,
-            sheet_name="espp",
-            parse_dates=["date"],
+            sheet_name="currency_movements",
+            parse_dates=["date", "buy_date"],
+            dtype=dtypes,
         )
 
     return RawData(
@@ -213,6 +295,7 @@ def read_data(sub_dir, file_name):
         df_buy_orders,
         df_sell_orders,
         df_currency_conversions,
+        df_currency_movements,
         df_stock_splits,
     )
 
@@ -354,21 +437,21 @@ def add_total_gain_rows(df: pd.DataFrame) -> pd.DataFrame:
 
     total_dfs = []
     # add empty row first
-    new_row = {c: None for c in cols}
+    new_row = {c: "" for c in cols}
     new_row["Symbol"] = "---------------------"
     total_dfs.append(pd.DataFrame([new_row]))
 
-    new_row = {c: None for c in cols}
+    new_row = {c: "" for c in cols}
     new_row["Symbol"] = "Gains (incl. losses)"
     new_row["Gain [EUR]"] = net_gains
     total_dfs.append(pd.DataFrame([new_row]))
 
-    new_row = {c: None for c in cols}
+    new_row = {c: "" for c in cols}
     new_row["Symbol"] = "Gains (excl. losses)"
     new_row["Gain [EUR]"] = gains
     total_dfs.append(pd.DataFrame([new_row]))
 
-    new_row = {c: None for c in cols}
+    new_row = {c: "" for c in cols}
     new_row["Symbol"] = "Losses"
     new_row["Gain [EUR]"] = losses
     total_dfs.append(pd.DataFrame([new_row]))
@@ -597,4 +680,5 @@ def transact_dict_to_df(transact_dict, mode):
             "Gain [EUR]",
         ],
     )
+
     return df

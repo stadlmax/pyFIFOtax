@@ -376,8 +376,6 @@ class IbkrConverter(Converter):
 
 def main(args):
     if args.type == "ibkr":
-        from ibkr_converter import IbkrConverter
-
         converter = IbkrConverter(args)
     else:
         raise ValueError("This type of converter is not recognised")
