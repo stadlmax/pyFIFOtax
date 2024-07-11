@@ -426,7 +426,7 @@ class CurrencyMovementRow(DataFrameRow):
         foreign_amount = pd.to_numeric(json_dict["Amount"].strip("-$").replace(",", ""))
         return CurrencyMovementRow(
             date,
-            datetime(999, 12, 31),
+            date,  # not relevant
             -foreign_amount,
             fees,
             "USD",

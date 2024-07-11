@@ -33,13 +33,15 @@ The reporting tool will create FIFO queues of Foreign Currencies (i.e. not EUR) 
 # Report Generation
 `create_report.py` will generate the report for you. Usage:
 ```
-python3 create_report.py -dir <sub_dir of inputs/outputs> -f <file name of the transaction history> -y <report year> -o <output file name> -m <kind of exchange rates>
+python3 create_report.py -dir <sub_dir of inputs/outputs> -f <file name of the transaction history> -y <report year> -m <kind of exchange rates> [--all]
 ```
-Note that the filenames should be valid Excel files, e.g. `transactions.xlsx` as input and `report.xlsx` as output. 
+Note that the input file name should include the file extension, e.g. `transactions.xlsx`. 
 
-For the reporting, you can choose conversion based on daily exchange rates (`-m daily`) or monthly averages (`-m monthly_avg`). Both should (no guarantee of correctness) be fine in terms of tax reporting. However, one should (no guarantee of correctness) be consistent across years. It might be just wise to choose it once and go for it in the following years. But note that it can actually make quite a difference.
+For the reporting, you can choose conversion based on daily exchange rates (`-m daily`) or monthly averages (`-m monthly`). Both should (no guarantee of correctness) be fine in terms of tax reporting. However, one should (no guarantee of correctness) be consistent across years. It might be just wise to choose it once and go for it in the following years. But note that it can actually make quite a difference. 
 
 The generated report will contain several sheets with details of the transactions matching sell and buy orders based on the FIFO principle and including the right conversion rates to EUR. The last sheet will contain a summary intended as guidance for ELSTER.
+
+If you include the optional flag `--all`, reports for all calendar years and both exchange rate modes will be generated.
 
 ## AWV Reports
 In an updated version of this code, Z4 and Z10 entries intended for reporting transactions exceeding 12_500 EUR to the Bunsdesbank are also created automatically. You will find the corresponding sheets "Z4" and "Z10" in `awv_report_<report_year>.xlsx`. Note: for now this is only supported for any transaction involving NVDA shares denoted in USD.

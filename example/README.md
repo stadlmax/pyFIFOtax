@@ -7,9 +7,9 @@ This folder contains an example.
 ## commands to generate the example
 This assumes to running the script in the root directory.
 ```
-python3 create_report.py -dir example -f transactions.xlsx -y 2022 -m daily -o report_2022_daily_rates.xlsx
+python3 create_report.py -dir example -f transactions.xlsx -y 2022 -m daily
 ```
 for the daily exchange rates, and
 ```
-python3 create_report.py -dir example -f transactions.xlsx -y 2022 -m monthly_avg -o report_2022_monthly_rates.xlsx
+python3 create_report.py -dir example -f transactions.xlsx -y 2022 -m monthly
 ```

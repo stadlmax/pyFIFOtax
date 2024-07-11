@@ -43,7 +43,7 @@ def test_summarize_report_order(file_name):
 
 example_outputs = [
     ("daily", [914.25, 974.86, 247.01, 27.96, 29.9, 66.64]),
-    ("monthly_avg", [829.32, 932.75, 294.1, 28.6, 29.54, 15.89]),
+    ("monthly", [829.32, 932.75, 294.1, 28.6, 29.54, 15.89]),
 ]
 
 
@@ -62,7 +62,7 @@ def test_summarize_report_example(mode, desired: list):
 
 example_stock_split_outputs = [
     ("daily", [6728.57, 6691.20, 149.03, 27.96, 29.9, 66.64]),
-    ("monthly_avg", [6650.94, 6640.13, 179.86, 28.6, 29.54, 15.89]),
+    ("monthly", [6650.94, 6640.13, 179.86, 28.6, 29.54, 15.89]),
 ]
 
 

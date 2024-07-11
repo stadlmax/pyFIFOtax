@@ -209,6 +209,14 @@ class ReportData:
             )
             self.report_events.extend(ESPPEvent.from_report(raw_data.espp))
 
+        self.report_years = set(
+            [
+                e.date.year
+                for e in self.report_events
+                if not isinstance(e, StockSplitEvent)
+            ]
+        )
+
     def process_report_events(self):
         for event in self.report_events:
             if isinstance(event, RSUEvent):
@@ -397,9 +405,9 @@ class ReportData:
         )
 
     def consolidate_report(self, report_year, mode):
-        if mode.lower() not in ["daily", "monthly_avg"]:
+        if mode.lower() not in ["daily", "monthly"]:
             raise ValueError(
-                f"Expected exchange rate mode to be in (daily, monthly_avg), got {mode}."
+                f"Expected exchange rate mode to be in (daily, monthly), got {mode}."
             )
         self.apply_exchange_rates()
 
@@ -486,3 +494,16 @@ class ReportData:
             self.sub_dir,
             report_file_name,
         )
+
+    def create_all_reports(self, s, awv_threshold_eur=12_500):
+        report_years = self.report_years
+
+        for year in report_years:
+            if not self.legacy_mode:
+                file_name = f"awv_report_{year}.xlsx"
+                self.create_excel_report_awv(year, file_name, awv_threshold_eur)
+
+            daily_file_name = f"tax_report_{year}_daily_rates.xlsx"
+            monthly_file_name = f"tax_report_{year}_monthly_rates.xlsx"
+            self.create_excel_report(year, "daily", daily_file_name)
+            self.create_excel_report(year, "monthly", monthly_file_name)
