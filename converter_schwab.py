@@ -13,6 +13,7 @@ from pyfifotax.data_structures_dataframe import (
     DividendRow,
     TaxWithholdingRow,
     CurrencyConversionRow,
+    CurrencyMovementRow,
 )
 
 
@@ -139,6 +140,8 @@ def process_schwab_json(json_file_name, xlsx_file_name):
     if len(schwab_wire_events) == 0:
         schwab_wire_events.append(CurrencyConversionRow.empty_dict())
 
+    schwab_currency_movement_events = [CurrencyMovementRow.empty_dict()]
+
     dfs = {
         "rsu": pd.DataFrame(schwab_rsu_events),
         "espp": pd.DataFrame(schwab_espp_events),
@@ -146,6 +149,7 @@ def process_schwab_json(json_file_name, xlsx_file_name):
         "buy_orders": pd.DataFrame(schwab_buy_events),
         "sell_orders": pd.DataFrame(schwab_sell_events),
         "currency_conversions": pd.DataFrame(schwab_wire_events),
+        "currency_movements": pd.DataFrame(schwab_currency_movement_events),
     }
 
     with pd.ExcelWriter(

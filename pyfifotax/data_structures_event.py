@@ -16,6 +16,7 @@ from pyfifotax.data_structures_dataframe import (
     SellOrderRow,
     DividendRow,
     CurrencyConversionRow,
+    CurrencyMovementRow,
     StockSplitRow,
 )
 from pyfifotax.utils import to_decimal, round_decimal
@@ -62,8 +63,8 @@ class RSUEvent(ReportEvent):
         self.withheld_shares = withheld_shares
 
     @staticmethod
-    def from_df_row(row: Series) -> RSUEvent:
-        row = RSURow.from_df_row(row)
+    def from_df_row(df_row: Series) -> RSUEvent:
+        row = RSURow.from_df_row(df_row)
         recv_share = FIFOShare(
             buy_date=row.date,
             symbol=row.symbol,
@@ -104,8 +105,8 @@ class DividendEvent(ReportEvent):
         self.withheld_tax = withheld_tax
 
     @staticmethod
-    def from_df_row(row: Series) -> DividendEvent:
-        row = DividendRow.from_df_row(row)
+    def from_df_row(df_row: Series) -> DividendEvent:
+        row = DividendRow.from_df_row(df_row)
         gross_amount = to_decimal(row.amount)
         tax_amount = to_decimal(row.tax_withholding)
         net_amount = gross_amount - tax_amount
@@ -156,8 +157,8 @@ class ESPPEvent(ReportEvent):
         self.received_shares = received_shares
 
     @staticmethod
-    def from_df_row(row: Series) -> ESPPEvent:
-        row = ESPPRow.from_df_row(row)
+    def from_df_row(df_row: Series) -> ESPPEvent:
+        row = ESPPRow.from_df_row(df_row)
         quantity = to_decimal(row.quantity)
         buy_price = to_decimal(row.buy_price)
         contribution = buy_price * quantity
@@ -202,8 +203,8 @@ class BuyEvent(ReportEvent):
         self.currency = currency
 
     @staticmethod
-    def from_df_row(row: Series) -> BuyEvent:
-        row = BuyOrderRow.from_df_row(row)
+    def from_df_row(df_row: Series) -> BuyEvent:
+        row = BuyOrderRow.from_df_row(df_row)
         buy_price = to_decimal(row.buy_price)
         quantity = to_decimal(row.quantity)
         fees = to_decimal(row.fees)
@@ -265,8 +266,8 @@ class SellEvent(ReportEvent):
         self.paid_fees = paid_fees
 
     @staticmethod
-    def from_df_row(row: Series) -> SellEvent:
-        row = SellOrderRow.from_df_row(row)
+    def from_df_row(df_row: Series) -> SellEvent:
+        row = SellOrderRow.from_df_row(df_row)
         sell_price = to_decimal(row.sell_price)
         quantity = to_decimal(row.quantity)
         fees = to_decimal(row.fees)
@@ -309,7 +310,7 @@ class CurrencyConversionEvent(ReportEvent):
     def __init__(
         self,
         date: datetime,
-        foreign_amount: decimal,
+        foreign_amount: decimal.Decimal,
         source_fees: Optional[Forex],
         source_currency: str,
         target_currency: str,
@@ -321,8 +322,8 @@ class CurrencyConversionEvent(ReportEvent):
         self.target_currency = target_currency
 
     @staticmethod
-    def from_df_row(row: Series) -> CurrencyConversionEvent:
-        row = CurrencyConversionRow.from_df_row(row)
+    def from_df_row(df_row: Series) -> CurrencyConversionEvent:
+        row = CurrencyConversionRow.from_df_row(df_row)
         if row.source_fees < 0.0:
             msg = f"For Transaction on {row.date}, fee of {row.source_fees} {row.source_currency} is negative."
             raise ValueError(msg)
@@ -346,6 +347,23 @@ class CurrencyConversionEvent(ReportEvent):
         )
 
 
+class CurrencyMovementEvent(ReportEvent):
+    def __init__(
+        self, date: datetime, buy_date: datetime, amount: decimal.Decimal, currency: str
+    ):
+        super().__init__(date, 0)
+        self.buy_date = buy_date
+        self.amount = amount
+        self.currency = currency
+
+    @staticmethod
+    def from_df_row(df_row: Series) -> ReportEvent:
+        row = CurrencyMovementRow.from_df_row(df_row)
+        return CurrencyMovementEvent(
+            row.date, row.buy_date, to_decimal(row.amount), row.currency
+        )
+
+
 class StockSplitEvent(ReportEvent):
     def __init__(
         self,
@@ -358,8 +376,8 @@ class StockSplitEvent(ReportEvent):
         self.shares_after_split = shares_after_split
 
     @staticmethod
-    def from_df_row(row: Series) -> StockSplitEvent:
-        row = StockSplitRow.from_df_row(row)
+    def from_df_row(df_row: Series) -> StockSplitEvent:
+        row = StockSplitRow.from_df_row(df_row)
         return StockSplitEvent(
             date=row.date,
             symbol=row.symbol,

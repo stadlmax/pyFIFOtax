@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from dataclasses import dataclass, asdict
 import pandas as pd
+import numpy as np
 from pandas.core.series import Series
 
 from typing import Optional
@@ -18,21 +19,29 @@ class DataFrameRow:
         raise NotImplementedError
 
     @staticmethod
-    def empty_dict() -> dict:
+    def from_df_row(row: Series) -> DataFrameRow:
         raise NotImplementedError
 
     @staticmethod
-    def from_df_row(row: Series) -> DataFrameRow:
+    def default_dict() -> dict:
         raise NotImplementedError
+
+    @classmethod
+    def type_dict(cls) -> dict:
+        return {k: type(v) for k, v in cls.default_dict().items()}
+
+    @classmethod
+    def empty_dict(cls) -> dict:
+        return {k: None for k in cls.default_dict().keys()}
 
 
 @dataclass
 class ESPPRow(DataFrameRow):
     date: datetime
     symbol: str
-    buy_price: pd.Float64Dtype
-    fair_market_value: pd.Float64Dtype
-    quantity: pd.Float64Dtype
+    buy_price: np.float64
+    fair_market_value: np.float64
+    quantity: np.float64
     currency: str
     comment: str
 
@@ -61,8 +70,10 @@ class ESPPRow(DataFrameRow):
         )
 
     @staticmethod
-    def empty_dict() -> dict:
-        tmp = ESPPRow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "", "").to_dict()
+    def default_dict() -> dict:
+        tmp = ESPPRow(
+            datetime(1, 1, 1), "", np.float64(0), np.float64(0), np.float64(0), "", ""
+        ).to_dict()
         return {k: None for k in tmp.keys()}
 
     @staticmethod
@@ -82,9 +93,9 @@ class ESPPRow(DataFrameRow):
 class RSURow(DataFrameRow):
     date: datetime
     symbol: str
-    gross_quantity: Optional[pd.Float64Dtype]
-    net_quantity: pd.Float64Dtype
-    fair_market_value: pd.Float64Dtype
+    gross_quantity: Optional[np.float64]
+    net_quantity: np.float64
+    fair_market_value: np.float64
     currency: str
     comment: str
 
@@ -153,9 +164,10 @@ class RSURow(DataFrameRow):
         )
 
     @staticmethod
-    def empty_dict() -> dict:
-        tmp = RSURow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "", "").to_dict()
-        return {k: None for k in tmp.keys()}
+    def default_dict() -> dict:
+        return RSURow(
+            datetime(1, 1, 1), "", np.float64(0), np.float64(0), np.float64(0), "", ""
+        ).to_dict()
 
     @staticmethod
     def from_df_row(row: Series) -> RSURow:
@@ -174,8 +186,8 @@ class RSURow(DataFrameRow):
 class DividendRow(DataFrameRow):
     date: datetime
     symbol: str
-    amount: pd.Float64Dtype
-    tax_withholding: pd.Float64Dtype
+    amount: np.float64
+    tax_withholding: np.float64
     currency: str
     comment: str
 
@@ -189,15 +201,16 @@ class DividendRow(DataFrameRow):
             date,
             symbol,
             amount,
-            pd.to_numeric(0),
+            np.float64(0),
             "USD",
             "Automated Schwab Import (JSON)",
         )
 
     @staticmethod
-    def empty_dict() -> dict:
-        tmp = DividendRow(datetime(1, 1, 1), "", 0.0, 0.0, "", "").to_dict()
-        return {k: None for k in tmp.keys()}
+    def default_dict() -> dict:
+        return DividendRow(
+            datetime(1, 1, 1), "", np.float64(0), np.float64(0), "", ""
+        ).to_dict()
 
     @staticmethod
     def from_df_row(row: Series) -> DividendRow:
@@ -215,7 +228,7 @@ class DividendRow(DataFrameRow):
 class TaxWithholdingRow(DataFrameRow):
     date: datetime
     symbol: str
-    amount: pd.Float64Dtype
+    amount: np.float64
     currency: str
 
     @staticmethod
@@ -232,18 +245,17 @@ class TaxWithholdingRow(DataFrameRow):
         )
 
     @staticmethod
-    def empty_dict() -> dict:
-        tmp = TaxWithholdingRow(datetime(1, 1, 1), "", 0.0, "").to_dict()
-        return {k: None for k in tmp.keys()}
+    def default_dict() -> dict:
+        return TaxWithholdingRow(datetime(1, 1, 1), "", np.float64(0), "").to_dict()
 
 
 @dataclass
 class SellOrderRow(DataFrameRow):
     date: datetime
     symbol: str
-    quantity: pd.Float64Dtype
-    sell_price: pd.Float64Dtype
-    fees: pd.Float64Dtype
+    quantity: np.float64
+    sell_price: np.float64
+    fees: np.float64
     currency: str
     comment: str
 
@@ -283,9 +295,10 @@ class SellOrderRow(DataFrameRow):
         )
 
     @staticmethod
-    def empty_dict() -> dict:
-        tmp = SellOrderRow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "", "").to_dict()
-        return {k: None for k in tmp.keys()}
+    def default_dict() -> dict:
+        return SellOrderRow(
+            datetime(1, 1, 1), "", np.float64(0), np.float64(0), np.float64(0), "", ""
+        ).to_dict()
 
     @staticmethod
     def from_df_row(row: Series) -> SellOrderRow:
@@ -302,18 +315,19 @@ class SellOrderRow(DataFrameRow):
 
 @dataclass
 class BuyOrderRow(DataFrameRow):
-    date: str
+    date: datetime
     symbol: str
-    quantity: pd.Float64Dtype
-    buy_price: pd.Float64Dtype
-    fees: pd.Float64Dtype
+    quantity: np.float64
+    buy_price: np.float64
+    fees: np.float64
     currency: str
     comment: str
 
     @staticmethod
-    def empty_dict() -> dict:
-        tmp = BuyOrderRow(datetime(1, 1, 1), "", 0.0, 0.0, 0.0, "", "").to_dict()
-        return {k: None for k in tmp.keys()}
+    def default_dict() -> dict:
+        return BuyOrderRow(
+            datetime(1, 1, 1), "", np.float64(0), np.float64(0), np.float64(0), "", ""
+        ).to_dict()
 
     @staticmethod
     def from_df_row(row: Series) -> BuyOrderRow:
@@ -331,8 +345,8 @@ class BuyOrderRow(DataFrameRow):
 @dataclass
 class CurrencyConversionRow(DataFrameRow):
     date: datetime
-    foreign_amount: pd.Float64Dtype
-    source_fees: pd.Float64Dtype
+    foreign_amount: np.float64
+    source_fees: np.float64
     source_currency: str
     target_currency: str
     comment: str
@@ -354,9 +368,10 @@ class CurrencyConversionRow(DataFrameRow):
         )
 
     @staticmethod
-    def empty_dict() -> dict:
-        tmp = CurrencyConversionRow(datetime(1, 1, 1), 0.0, 0.0, "", "", "").to_dict()
-        return {k: None for k in tmp.keys()}
+    def default_dict() -> dict:
+        return CurrencyConversionRow(
+            datetime(1, 1, 1), np.float64(0), np.float64(0), "", "", ""
+        ).to_dict()
 
     @staticmethod
     def from_df_row(row: Series) -> CurrencyConversionRow:
@@ -371,10 +386,41 @@ class CurrencyConversionRow(DataFrameRow):
 
 
 @dataclass
+class CurrencyMovementRow(DataFrameRow):
+    date: datetime
+    buy_date: datetime
+    amount: np.float64
+    currency: str
+    comment: str
+
+    @staticmethod
+    def default_dict() -> dict:
+        return CurrencyMovementRow(
+            datetime(1, 1, 1), datetime(1, 1, 1), np.float64(0), "", ""
+        ).to_dict()
+
+    @staticmethod
+    def from_df_row(row: Series) -> CurrencyMovementRow:
+        # dummy datetime for EUR movements and withdrawals
+        buy_date = (
+            datetime(1, 1, 1)
+            if row.currency == "EUR" or row.amount < 0
+            else row.buy_date
+        )
+        return CurrencyMovementRow(
+            row.date,
+            row.buy_date,
+            row.amount,
+            row.currency,
+            row.comment,
+        )
+
+
+@dataclass
 class StockSplitRow(DataFrameRow):
     date: datetime
     symbol: str
-    shares_after_split: pd.Float64Dtype
+    shares_after_split: np.float64
 
     @staticmethod
     def from_df_row(row: Series) -> StockSplitRow:
@@ -385,6 +431,5 @@ class StockSplitRow(DataFrameRow):
         )
 
     @staticmethod
-    def empty_dict() -> dict:
-        tmp = StockSplitRow(datetime(1, 1, 1), "", 0.0)
-        return {k: None for k in tmp.keys()}
+    def default_dict() -> dict:
+        return StockSplitRow(datetime(1, 1, 1), "", np.float64(0.0)).to_dict()

@@ -82,7 +82,7 @@ class FIFOQueue:
         self.assets: list[FIFOObject] = []
         self.total_quantity: decimal = to_decimal(0)
 
-    def apply_split(self, shares_after_split: decimal):
+    def apply_split(self, shares_after_split: decimal.Decimal):
         self.total_quantity = to_decimal(0)
         for asset in self.assets:
             asset.quantity = asset.quantity * shares_after_split
@@ -110,7 +110,12 @@ class FIFOQueue:
             raise ValueError("Cannot peek first element from an empty queue.")
         return self.assets[0]
 
-    def pop(self, quantity: decimal, sell_price: decimal, sell_date: datetime):
+    def pop(
+        self,
+        quantity: decimal.Decimal,
+        sell_price: decimal.Decimal,
+        sell_date: datetime,
+    ):
         if math.isclose(quantity, 0, abs_tol=1e-10):
             return []
 
