@@ -21,34 +21,41 @@ parser.add_argument(
     "-f",
     dest="file_name",
     type=str,
-    default="transactions.xlsx",
-    help="file for list of transactions (input), default is 'transactions.xlsx'",
+    help="file name of to file containing list of transactions",
 )
 parser.add_argument(
     "-y",
     dest="report_year",
     type=int,
-    default=2022,
-    help="year for which report should be generated, default is 2022",
+    help="year for which report should be generated",
 )
 parser.add_argument(
     "-m",
     dest="rate_mode",
-    choices=["daily", "monthly_avg"],
+    choices=["daily", "monthly"],
     help="which exchange rates to apply, either daily exchange rates or monthly averages",
 )
 parser.add_argument(
-    "-o",
-    dest="report_file_name",
-    type=str,
-    help="file name of generated report file (output), e.g. report_tax_2022.xlsx",
+    "--all",
+    action="store_true",
+    help=(
+        "If set, generate reports for all years found in the data,"
+        " and both daily and monthly exchange rates."
+        " Overrides both 'rate_mode' and 'report_year'."
+    ),
 )
 
 
-def main(sub_dir, file_name, report_year, rate_mode, report_file_name):
+def main(sub_dir, file_name, report_year, rate_mode, create_all_reports):
     report = ReportData(sub_dir=sub_dir, file_name=file_name)
-    report.create_excel_report(report_year, rate_mode, report_file_name)
-    report.create_excel_report_awv(report_year, f"awv_report_{report_year}.xlsx")
+    if create_all_reports:
+        report.create_all_reports(sub_dir)
+
+    else:
+        report.create_excel_report(
+            report_year, rate_mode, f"tax_report_{report_year}_{rate_mode}_rates"
+        )
+        report.create_excel_report_awv(report_year, f"awv_report_{report_year}.xlsx")
 
 
 if __name__ == "__main__":
@@ -58,5 +65,5 @@ if __name__ == "__main__":
         args.file_name,
         args.report_year,
         args.rate_mode,
-        args.report_file_name,
+        args.all,
     )

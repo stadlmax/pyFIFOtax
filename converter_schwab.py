@@ -173,6 +173,7 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
         xlsx_file_name, engine="xlsxwriter", datetime_format="yyyy-mm-dd"
     ) as writer:
         for k, v in dfs.items():
+            v.sort_values("date", inplace=True)
             create_report_sheet(k, v, writer)
             # overwrite column width somewhat inline with manual examples
             writer.sheets[k].set_column(1, 20, 16)

@@ -371,21 +371,6 @@ def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
     if df.empty:
         return
 
-    if "Date" in df:
-        df.sort_values("Date", inplace=True)
-    elif "date" in df:
-        df.sort_values("date", inplace=True)
-    elif "Sell Date" in df:
-        df.sort_values(["Sell Date", "Buy Date"], inplace=True)
-    elif "Meldezeitraum" in df:
-        df.sort_values("Meldezeitraum", inplace=True)
-    elif "ELSTER" in df.columns[0]:
-        pass  # don't sort ELSTER frames
-    else:
-        raise RuntimeError(
-            "Couldn't sort data, expected either 'Date', 'date', 'Sell Date', or 'Meldezeitraum' column to exist"
-        )
-
     for c in df.columns:
         if not df[c].empty and isinstance(df[c].iloc[0], decimal.Decimal):
             df[c] = df[c].astype(float)
@@ -409,18 +394,17 @@ def add_total_amount_row(df):
 
     total_dfs = []
     # add empty row first
-    new_row = {c: None for c in cols}
-    new_row["Symbol"] = "------------"
+    new_row = {c: "---------------------" if c == "Symbol" else None for c in cols}
     new_row = pd.DataFrame([new_row])
     total_dfs.append(new_row)
 
     new_row = {c: None for c in cols}
-    new_row["Symbol"] = "Total Amount"
+    new_row = {c: "Total Amount" if c == "Symbol" else None for c in cols}
     new_row["Amount [EUR]"] = amount
     new_row = pd.DataFrame([new_row])
     total_dfs.append(new_row)
 
-    df = pd.concat([df, *total_dfs], ignore_index=True)
+    df = pd.concat([df, *total_dfs], ignore_index=True, axis=0)
 
     return df
 
@@ -437,26 +421,22 @@ def add_total_gain_rows(df: pd.DataFrame) -> pd.DataFrame:
 
     total_dfs = []
     # add empty row first
-    new_row = {c: "" for c in cols}
-    new_row["Symbol"] = "---------------------"
+    new_row = {c: "---------------------" if c == "Symbol" else None for c in cols}
     total_dfs.append(pd.DataFrame([new_row]))
 
-    new_row = {c: "" for c in cols}
-    new_row["Symbol"] = "Gains (incl. losses)"
+    new_row = {c: "Gains (incl. losses)" if c == "Symbol" else None for c in cols}
     new_row["Gain [EUR]"] = net_gains
     total_dfs.append(pd.DataFrame([new_row]))
 
-    new_row = {c: "" for c in cols}
-    new_row["Symbol"] = "Gains (excl. losses)"
+    new_row = {c: "Gains (excl. losses)" if c == "Symbol" else None for c in cols}
     new_row["Gain [EUR]"] = gains
     total_dfs.append(pd.DataFrame([new_row]))
 
-    new_row = {c: "" for c in cols}
-    new_row["Symbol"] = "Losses"
+    new_row = {c: "Losses" if c == "Symbol" else None for c in cols}
     new_row["Gain [EUR]"] = losses
     total_dfs.append(pd.DataFrame([new_row]))
 
-    df = pd.concat([df, *total_dfs], ignore_index=True)
+    df = pd.concat([df, *total_dfs], ignore_index=True, axis=0)
 
     return df
 
@@ -471,9 +451,6 @@ def write_report(
         and df_fees.empty
         and df_taxes.empty
     ):
-        warnings.warn(
-            "Tax report was not created as there were no transactions to report."
-        )
         return
 
     df_shares = df_shares.copy()
@@ -483,6 +460,12 @@ def write_report(
     df_taxes = df_taxes.copy()
 
     df_summary = summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes)
+
+    df_shares.sort_values(["Sell Date", "Buy Date"], inplace=True)
+    df_forex.sort_values(["Sell Date", "Buy Date"], inplace=True)
+    df_dividends.sort_values("Date", inplace=True)
+    df_fees.sort_values("Date", inplace=True)
+    df_taxes.sort_values("Date", inplace=True)
 
     df_shares = add_total_gain_rows(df_shares)
     df_forex = add_total_gain_rows(df_forex)
@@ -504,10 +487,10 @@ def write_report(
 
 def write_report_awv(df_z4, df_z10, sub_dir, file_name):
     if df_z4.empty and df_z10.empty:
-        warnings.warn(
-            "AWV reports didn't get created as there were no transactions to report."
-        )
         return
+
+    df_z4.sort_values("Meldezeitraum", inplace=True)
+    df_z10.sort_values("Meldezeitraum", inplace=True)
 
     report_path = os.path.join(sub_dir, file_name)
     with pd.ExcelWriter(
@@ -546,7 +529,7 @@ def filter_forex_dict(forex_dict, report_year):
 
 
 def forex_dict_to_df(forex_dict, mode):
-    assert mode.lower() in ["daily", "monthly_avg"]
+    assert mode.lower() in ["daily", "monthly"]
     tmp = {
         "Symbol": [],
         "Comment": [],
@@ -616,7 +599,7 @@ def filter_transact_dict(trans_dict, report_year, speculative_period=None):
 
 
 def transact_dict_to_df(transact_dict, mode):
-    assert mode.lower() in ["daily", "monthly_avg"]
+    assert mode.lower() in ["daily", "monthly"]
     tmp = {
         "Symbol": [],
         "Quantity": [],
