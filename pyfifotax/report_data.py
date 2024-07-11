@@ -319,16 +319,25 @@ class ReportData:
 
             elif isinstance(event, CurrencyMovementEvent):
                 if event.amount > 0:
+
                     new_forex = FIFOForex(
                         currency=event.currency,
-                        quantity=event.amount,
+                        quantity=(
+                            event.amount - event.fees.amount
+                            if event.fees is not None
+                            else event.amount
+                        ),
                         buy_date=event.buy_date,
                         source=f"Currency Deposit",
                     )
                     self.held_forex[event.currency].push(new_forex)
+                    if event.fees is not None:
+                        self.misc["Fees"].append(event.fees)
 
                 else:
                     # just pop, don't handle currency
+                    if event.fees is not None:
+                        self.misc["Fees"].append(event.fees)
                     self.held_forex[event.currency].pop(
                         -event.amount,
                         to_decimal(1),

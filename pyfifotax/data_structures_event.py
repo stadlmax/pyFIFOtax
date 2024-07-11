@@ -349,18 +349,38 @@ class CurrencyConversionEvent(ReportEvent):
 
 class CurrencyMovementEvent(ReportEvent):
     def __init__(
-        self, date: datetime, buy_date: datetime, amount: decimal.Decimal, currency: str
+        self,
+        date: datetime,
+        buy_date: datetime,
+        amount: decimal.Decimal,
+        fees: Optional[Forex],
+        currency: str,
     ):
         super().__init__(date, 0)
         self.buy_date = buy_date
         self.amount = amount
+        self.fees = fees
         self.currency = currency
 
     @staticmethod
     def from_df_row(df_row: Series) -> ReportEvent:
         row = CurrencyMovementRow.from_df_row(df_row)
+        if row.fees > 0.0:
+            fees = Forex(
+                currency=row.currency,
+                date=row.date,
+                amount=to_decimal(row.fees),
+                comment="Fees for Currency Movement",
+            )
+        else:
+            fees = None
+
         return CurrencyMovementEvent(
-            row.date, row.buy_date, to_decimal(row.amount), row.currency
+            row.date,
+            row.buy_date,
+            to_decimal(row.amount),
+            fees,
+            row.currency,
         )
 
 
