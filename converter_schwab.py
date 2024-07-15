@@ -13,7 +13,7 @@ from pyfifotax.data_structures_dataframe import (
     DividendRow,
     TaxWithholdingRow,
     CurrencyConversionRow,
-    CurrencyMovementRow,
+    MoneyTransferRow,
 )
 
 
@@ -57,7 +57,7 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
     schwab_buy_events = [BuyOrderRow.empty_dict()]
     schwab_sell_events = []
     schwab_wire_events = []
-    schwab_currency_movement_events = []
+    schwab_money_transfer_events = []
 
     with open(json_file_name) as f:
         d = json.load(f)
@@ -108,8 +108,8 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
                     )
 
                 else:
-                    schwab_currency_movement_events.append(
-                        CurrencyMovementRow.from_schwab_json(e).to_dict()
+                    schwab_money_transfer_events.append(
+                        MoneyTransferRow.from_schwab_json(e).to_dict()
                     )
 
             elif e["Action"] == "Tax Withholding" and e["Description"] == "Debit":
@@ -156,8 +156,8 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
         schwab_sell_events.append(SellOrderRow.empty_dict())
     if len(schwab_wire_events) == 0:
         schwab_wire_events.append(CurrencyConversionRow.empty_dict())
-    if len(schwab_currency_movement_events) == 0:
-        schwab_currency_movement_events.append(CurrencyMovementRow.empty_dict())
+    if len(schwab_money_transfer_events) == 0:
+        schwab_money_transfer_events.append(MoneyTransferRow.empty_dict())
 
     dfs = {
         "rsu": pd.DataFrame(schwab_rsu_events),
@@ -166,7 +166,7 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
         "buy_orders": pd.DataFrame(schwab_buy_events),
         "sell_orders": pd.DataFrame(schwab_sell_events),
         "currency_conversions": pd.DataFrame(schwab_wire_events),
-        "currency_movements": pd.DataFrame(schwab_currency_movement_events),
+        "money_transfers": pd.DataFrame(schwab_money_transfer_events),
     }
 
     with pd.ExcelWriter(

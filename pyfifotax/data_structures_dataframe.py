@@ -385,7 +385,7 @@ class CurrencyConversionRow(DataFrameRow):
 
 
 @dataclass
-class CurrencyMovementRow(DataFrameRow):
+class MoneyTransferRow(DataFrameRow):
     date: datetime
     buy_date: datetime
     amount: np.float64
@@ -395,19 +395,19 @@ class CurrencyMovementRow(DataFrameRow):
 
     @staticmethod
     def default_dict() -> dict:
-        return CurrencyMovementRow(
+        return MoneyTransferRow(
             datetime(1, 1, 1), datetime(1, 1, 1), np.float64(0), np.float64(0), "", ""
         ).to_dict()
 
     @staticmethod
-    def from_df_row(row: Series) -> CurrencyMovementRow:
-        # dummy datetime for EUR movements and withdrawals
+    def from_df_row(row: Series) -> MoneyTransferRow:
+        # dummy datetime for EUR transfers and withdrawals
         buy_date = (
             datetime(1, 1, 1)
             if row.currency == "EUR" or row.amount < 0
             else row.buy_date
         )
-        return CurrencyMovementRow(
+        return MoneyTransferRow(
             row.date,
             buy_date,
             row.amount,
@@ -417,13 +417,13 @@ class CurrencyMovementRow(DataFrameRow):
         )
 
     @staticmethod
-    def from_schwab_json(json_dict: dict) -> CurrencyMovementRow:
+    def from_schwab_json(json_dict: dict) -> MoneyTransferRow:
         date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
         fees = pd.to_numeric(
             json_dict["FeesAndCommissions"].strip("-$").replace(",", "")
         )
         foreign_amount = pd.to_numeric(json_dict["Amount"].strip("-$").replace(",", ""))
-        return CurrencyMovementRow(
+        return MoneyTransferRow(
             date,
             date,  # not relevant
             -foreign_amount,
