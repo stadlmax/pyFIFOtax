@@ -243,8 +243,16 @@ def read_data(sub_dir, file_name):
     file_path = os.path.join(sub_dir, file_name)
     with pd.ExcelFile(file_path) as xls:
         dtypes = RSURow.type_dict()
+        dtypes["date"] = None
         df_rsu = pd.read_excel(
             xls, sheet_name="rsu", parse_dates=["date"], dtype=dtypes
+        )
+
+        dtypes = ESPPRow.type_dict()
+        dtypes["date"] = None
+        print(dtypes)
+        df_espp = pd.read_excel(
+            xls, sheet_name="espp", parse_dates=["date"], dtype=dtypes
         )
 
         dtypes = DividendRow.type_dict()
@@ -271,12 +279,6 @@ def read_data(sub_dir, file_name):
             xls, sheet_name="currency_conversions", parse_dates=["date"], dtype=dtypes
         )
         df_stock_splits = None  # set later
-
-        dtypes = ESPPRow.type_dict()
-        dtypes["date"] = None
-        df_espp = pd.read_excel(
-            xls, sheet_name="espp", parse_dates=["date"], dtype=dtypes
-        )
 
         dtypes = CurrencyMovementRow.type_dict()
         dtypes["date"] = None

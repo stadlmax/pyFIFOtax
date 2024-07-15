@@ -71,10 +71,9 @@ class ESPPRow(DataFrameRow):
 
     @staticmethod
     def default_dict() -> dict:
-        tmp = ESPPRow(
+        return ESPPRow(
             datetime(1, 1, 1), "", np.float64(0), np.float64(0), np.float64(0), "", ""
         ).to_dict()
-        return {k: None for k in tmp.keys()}
 
     @staticmethod
     def from_df_row(row: Series) -> ESPPRow:

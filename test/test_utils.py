@@ -72,6 +72,20 @@ def test_summarize_report_example_stock_splits(mode, desired: list):
     assert_allclose(summary, desired)
 
 
+file_names_partial_tests = [
+    "example_rsu.xlsx",
+    "example_espp.xlsx",
+]
+
+
+@pytest.mark.parametrize("file_name", file_names_partial_tests)
+def test_example_partial(file_name):
+    for year in range(2019, 2024 + 1):
+        for mode in ("daily", "monthly"):
+            summary = get_elster_summary(file_name, year, mode)
+            assert_allclose(summary, [0, 0, 0, 0, 0, 0])
+
+
 def test_summarize_forex_simple_legacy():
     with pytest.deprecated_call():
         summary = get_elster_summary("forex_simple_legacy.xlsx", 2022, "daily")
@@ -108,3 +122,18 @@ exception_outputs_legacy = [
 def test_summarize_exception_legacy(file_name, error_msg):
     with pytest.raises(ValueError, match=error_msg):
         get_elster_summary(file_name, 2022, "daily")
+
+
+def test_empty():
+    try:
+        get_elster_summary("example_empty.xlsx", 2022, "daily")
+    except Exception as e:
+        raise pytest.fail(f"EMPTY TEST FAILED, DID RAISE {e}")
+
+
+def test_empty_legacy():
+    try:
+        with pytest.deprecated_call():
+            get_elster_summary("example_legacy_empty.xlsx", 2022, "daily")
+    except Exception as e:
+        raise pytest.fail(f"EMPTY TEST FAILED, DID RAISE {e}")
