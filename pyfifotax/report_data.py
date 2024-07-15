@@ -11,7 +11,7 @@ from pyfifotax.data_structures_event import (
     BuyEvent,
     SellEvent,
     CurrencyConversionEvent,
-    CurrencyMovementEvent,
+    MoneyTransferEvent,
     DividendEvent,
     StockSplitEvent,
 )
@@ -170,7 +170,7 @@ class ReportData:
             if self.apply_stock_splits:
                 used_symbols.extend(list(raw_data.stock_splits.symbol.unique()))
             used_currencies.extend(list(raw_data.espp.currency.unique()))
-            used_currencies.extend(list(raw_data.currency_movements.currency.unique()))
+            used_currencies.extend(list(raw_data.money_transfers.currency.unique()))
 
         used_symbols = set(used_symbols)
         used_currencies = set(used_currencies)
@@ -205,7 +205,7 @@ class ReportData:
             )
         if not self.legacy_mode:
             self.report_events.extend(
-                CurrencyMovementEvent.from_report(raw_data.currency_movements)
+                MoneyTransferEvent.from_report(raw_data.money_transfers)
             )
             self.report_events.extend(ESPPEvent.from_report(raw_data.espp))
 
@@ -325,7 +325,7 @@ class ReportData:
                     )
                 )
 
-            elif isinstance(event, CurrencyMovementEvent):
+            elif isinstance(event, MoneyTransferEvent):
                 if event.amount > 0:
 
                     new_forex = FIFOForex(

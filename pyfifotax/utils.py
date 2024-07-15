@@ -18,7 +18,7 @@ from pyfifotax.data_structures_dataframe import (
     SellOrderRow,
     DividendRow,
     CurrencyConversionRow,
-    CurrencyMovementRow,
+    MoneyTransferRow,
 )
 
 
@@ -121,7 +121,7 @@ class RawData:
     buy_orders: pd.DataFrame
     sell_orders: pd.DataFrame
     currency_conversions: pd.DataFrame
-    currency_movements: pd.DataFrame
+    money_transfers: pd.DataFrame
     stock_splits: Optional[pd.DataFrame]
 
 
@@ -223,7 +223,7 @@ def read_data_legacy(sub_dir, file_name):
 
         df_stock_splits = None
         df_espp = None
-        df_currency_movements = None
+        df_money_transfers = None
 
     return RawData(
         df_deposits,
@@ -232,7 +232,7 @@ def read_data_legacy(sub_dir, file_name):
         df_buy_orders,
         df_sell_orders,
         df_currency_conversions,
-        df_currency_movements,
+        df_money_transfers,
         df_stock_splits,
     )
 
@@ -280,12 +280,12 @@ def read_data(sub_dir, file_name):
         )
         df_stock_splits = None  # set later
 
-        dtypes = CurrencyMovementRow.type_dict()
+        dtypes = MoneyTransferRow.type_dict()
         dtypes["date"] = None
         dtypes["buy_date"] = None
-        df_currency_movements = pd.read_excel(
+        df_money_transfers = pd.read_excel(
             xls,
-            sheet_name="currency_movements",
+            sheet_name="money_transfers",
             parse_dates=["date", "buy_date"],
             dtype=dtypes,
         )
@@ -297,7 +297,7 @@ def read_data(sub_dir, file_name):
         df_buy_orders,
         df_sell_orders,
         df_currency_conversions,
-        df_currency_movements,
+        df_money_transfers,
         df_stock_splits,
     )
 

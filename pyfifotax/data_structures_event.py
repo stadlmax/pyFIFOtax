@@ -16,7 +16,7 @@ from pyfifotax.data_structures_dataframe import (
     SellOrderRow,
     DividendRow,
     CurrencyConversionRow,
-    CurrencyMovementRow,
+    MoneyTransferRow,
     StockSplitRow,
 )
 from pyfifotax.utils import to_decimal, round_decimal
@@ -347,7 +347,7 @@ class CurrencyConversionEvent(ReportEvent):
         )
 
 
-class CurrencyMovementEvent(ReportEvent):
+class MoneyTransferEvent(ReportEvent):
     def __init__(
         self,
         date: datetime,
@@ -364,18 +364,18 @@ class CurrencyMovementEvent(ReportEvent):
 
     @staticmethod
     def from_df_row(df_row: Series) -> ReportEvent:
-        row = CurrencyMovementRow.from_df_row(df_row)
+        row = MoneyTransferRow.from_df_row(df_row)
         if row.fees > 0.0:
             fees = Forex(
                 currency=row.currency,
                 date=row.date,
                 amount=to_decimal(row.fees),
-                comment="Fees for Currency Movement",
+                comment="Fees for Transfer of Transfer",
             )
         else:
             fees = None
 
-        return CurrencyMovementEvent(
+        return MoneyTransferEvent(
             row.date,
             row.buy_date,
             to_decimal(row.amount),
