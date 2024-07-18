@@ -78,11 +78,19 @@ class FIFOShare(FIFOObject):
 
 
 class FIFOQueue:
-    def __init__(self):
+    def __init__(self, is_eur_queue: bool = False):
         self.assets: list[FIFOObject] = []
-        self.total_quantity: decimal = to_decimal(0)
+        self.total_quantity: decimal.Decimal = to_decimal(0)
+        self.is_eur_queue = is_eur_queue
+        if self.is_eur_queue:
+            self.assets.append(
+                FIFOForex("EUR", to_decimal(0), datetime(1, 1, 1, 0), "init")
+            )
 
     def apply_split(self, shares_after_split: decimal.Decimal):
+        if self.is_eur_queue:
+            return
+
         self.total_quantity = to_decimal(0)
         for asset in self.assets:
             asset.quantity = asset.quantity * shares_after_split
@@ -92,14 +100,19 @@ class FIFOQueue:
     def push(self, asset: FIFOObject):
         if self.is_empty():
             self.assets = [asset]
+
         else:
-            # insert based on buy date ("first in")
-            idx = 0
-            while (idx < len(self.assets)) and (
-                asset.buy_date > self.assets[idx].buy_date
-            ):
-                idx += 1
-            self.assets.insert(idx, asset)
+            if self.is_eur_queue:
+                self.assets[0].quantity += asset.quantity
+            else:
+                # insert based on buy date ("first in")
+                idx = 0
+                while (idx < len(self.assets)) and (
+                    asset.buy_date > self.assets[idx].buy_date
+                ):
+                    idx += 1
+                self.assets.insert(idx, asset)
+
         self.total_quantity += asset.quantity
 
     def is_empty(self):
@@ -116,6 +129,15 @@ class FIFOQueue:
         sell_price: decimal.Decimal,
         sell_date: datetime,
     ):
+        if self.is_eur_queue:
+            pop_asset = from_asset(self.peek(), quantity)
+            # not really relevant, but leave them anyways
+            pop_asset.sell_price = sell_price
+            pop_asset.sell_date = sell_date
+            self.peek().quantity -= quantity
+            self.total_quantity -= quantity
+            return [pop_asset]
+
         if math.isclose(quantity, 0, abs_tol=1e-10):
             return []
 

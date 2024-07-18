@@ -11,6 +11,8 @@ from pyfifotax.data_structures_event import (
     BuyEvent,
     SellEvent,
     CurrencyConversionEvent,
+    MoneyDepositEvent,
+    MoneyWithdrawalEvent,
     MoneyTransferEvent,
     DividendEvent,
     StockSplitEvent,
@@ -188,7 +190,9 @@ class ReportData:
 
         self.held_shares = {s: FIFOQueue() for s in used_symbols}
         self.sold_shares = {s: [] for s in used_symbols}
-        self.held_forex = {c: FIFOQueue() for c in used_currencies}
+        self.held_forex = {
+            c: FIFOQueue(is_eur_queue=c == "EUR") for c in used_currencies
+        }
         self.sold_forex = {c: [] for c in used_currencies}
 
         # first, just create all events from raw data
@@ -325,32 +329,30 @@ class ReportData:
                     )
                 )
 
-            elif isinstance(event, MoneyTransferEvent):
-                if event.amount > 0:
+            elif isinstance(event, MoneyDepositEvent):
+                new_forex = FIFOForex(
+                    currency=event.currency,
+                    quantity=(
+                        event.amount - event.fees.amount
+                        if event.fees is not None
+                        else event.amount
+                    ),
+                    buy_date=event.buy_date,
+                    source=f"Deposit of Money",
+                )
+                self.held_forex[event.currency].push(new_forex)
+                if event.fees is not None:
+                    self.misc["Fees"].append(event.fees)
 
-                    new_forex = FIFOForex(
-                        currency=event.currency,
-                        quantity=(
-                            event.amount - event.fees.amount
-                            if event.fees is not None
-                            else event.amount
-                        ),
-                        buy_date=event.buy_date,
-                        source=f"Currency Deposit",
-                    )
-                    self.held_forex[event.currency].push(new_forex)
-                    if event.fees is not None:
-                        self.misc["Fees"].append(event.fees)
-
-                else:
-                    # just pop, don't handle currency
-                    if event.fees is not None:
-                        self.misc["Fees"].append(event.fees)
-                    self.held_forex[event.currency].pop(
-                        -event.amount,
-                        to_decimal(1),
-                        event.date,
-                    )
+            elif isinstance(event, MoneyWithdrawalEvent):
+                # just pop, don't handle currency
+                if event.fees is not None:
+                    self.misc["Fees"].append(event.fees)
+                self.held_forex[event.currency].pop(
+                    event.amount,
+                    to_decimal(1),
+                    event.date,
+                )
 
             elif isinstance(event, CurrencyConversionEvent):
                 if not (

@@ -3,6 +3,7 @@ from __future__ import annotations
 import decimal
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 from typing import Optional
 
 import pandas as pd
@@ -22,17 +23,29 @@ from pyfifotax.data_structures_dataframe import (
 from pyfifotax.utils import to_decimal, round_decimal
 
 
+class EventPriority(Enum):
+    # add priority to make sure that buy/deposit transactions
+    # are processed before sell transactions
+    # espp/rsu deposit/dividend: prio 0
+    # sell: prio 1
+    # currency conversions: 2
+    # buy: prio 3
+    # stocksplit: 4 (at the end as assumed after market-close)
+    ESPP: int = 0
+    RSU: int = 0
+    DIVIDEND: int = 1
+    MONEY_DEPOSIT: int = 2
+    BUY: int = 3
+    SELL: int = 4
+    CURRENCY_CONVERSION = 5
+    MONEY_WITHDRAWAL: int = 6
+    STOCK_SPLIT: int = 7
+
+
 class ReportEvent:
-    def __init__(self, date: datetime, priority: int):
+    def __init__(self, date: datetime, priority: EventPriority):
         self.date = date
-        # add priority to make sure that buy/deposit transactions
-        # are processed before sell transactions
-        # espp/rsu deposit/dividend: prio 0
-        # sell: prio 1
-        # currency conversions: 2
-        # buy: prio 3
-        # stocksplit: 4 (at the end as assumed after market-close)
-        self.priority = priority
+        self.priority = priority.value
 
     @staticmethod
     def from_df_row(row: Series) -> ReportEvent:
@@ -57,7 +70,7 @@ class RSUEvent(ReportEvent):
         received_shares: FIFOShare,
         withheld_shares: Optional[FIFOShare],
     ):
-        super().__init__(date, 0)
+        super().__init__(date, EventPriority.RSU)
         self.symbol = symbol
         self.received_shares = received_shares
         self.withheld_shares = withheld_shares
@@ -98,7 +111,7 @@ class DividendEvent(ReportEvent):
         received_net_dividend: FIFOForex,
         withheld_tax: Optional[Forex],
     ):
-        super().__init__(date, 0)
+        super().__init__(date, EventPriority.DIVIDEND)
         self.currency = currency
         self.received_dividend = received_dividend
         self.received_net_dividend = received_net_dividend
@@ -148,7 +161,7 @@ class ESPPEvent(ReportEvent):
         contribution: decimal.Decimal,
         bonus: decimal.Decimal,
     ):
-        super().__init__(date, 0)
+        super().__init__(date, EventPriority.ESPP)
         self.symbol = symbol
         self.currency = currency
 
@@ -195,7 +208,7 @@ class BuyEvent(ReportEvent):
         paid_fees: Optional[Forex],
         currency: str,
     ):
-        super().__init__(date, 3)
+        super().__init__(date, EventPriority.BUY)
         self.symbol = symbol
         self.received_shares = received_shares
         self.cost_of_shares = cost_of_shares
@@ -257,7 +270,7 @@ class SellEvent(ReportEvent):
         received_forex: FIFOForex,
         paid_fees: Optional[Forex],
     ):
-        super().__init__(date, 1)
+        super().__init__(date, EventPriority.SELL)
         self.symbol = symbol
         self.currency = currency
         self.quantity = quantity
@@ -315,7 +328,7 @@ class CurrencyConversionEvent(ReportEvent):
         source_currency: str,
         target_currency: str,
     ):
-        super().__init__(date, 2)
+        super().__init__(date, EventPriority.CURRENCY_CONVERSION)
         self.foreign_amount = foreign_amount
         self.source_fees = source_fees
         self.source_currency = source_currency
@@ -355,15 +368,16 @@ class MoneyTransferEvent(ReportEvent):
         amount: decimal.Decimal,
         fees: Optional[Forex],
         currency: str,
+        priority: EventPriority,
     ):
-        super().__init__(date, 0)
+        super().__init__(date, priority)
         self.buy_date = buy_date
         self.amount = amount
         self.fees = fees
         self.currency = currency
 
     @staticmethod
-    def from_df_row(df_row: Series) -> ReportEvent:
+    def from_df_row(df_row: Series) -> MoneyTransferEvent:
         row = MoneyTransferRow.from_df_row(df_row)
         if row.fees > 0.0:
             fees = Forex(
@@ -375,12 +389,38 @@ class MoneyTransferEvent(ReportEvent):
         else:
             fees = None
 
-        return MoneyTransferEvent(
-            row.date,
-            row.buy_date,
-            to_decimal(row.amount),
-            fees,
-            row.currency,
+        amount = to_decimal(row.amount)
+        if amount > 0:
+            return MoneyDepositEvent(row.date, row.buy_date, amount, fees, row.currency)
+
+        return MoneyWithdrawalEvent(row.date, row.buy_date, -amount, fees, row.currency)
+
+
+class MoneyDepositEvent(MoneyTransferEvent):
+    def __init__(
+        self,
+        date: datetime,
+        buy_date: datetime,
+        amount: decimal.Decimal,
+        fees: Optional[Forex],
+        currency: str,
+    ):
+        super().__init__(
+            date, buy_date, amount, fees, currency, EventPriority.MONEY_DEPOSIT
+        )
+
+
+class MoneyWithdrawalEvent(MoneyTransferEvent):
+    def __init__(
+        self,
+        date: datetime,
+        buy_date: datetime,
+        amount: decimal.Decimal,
+        fees: Optional[Forex],
+        currency: str,
+    ):
+        super().__init__(
+            date, buy_date, amount, fees, currency, EventPriority.MONEY_WITHDRAWAL
         )
 
 
@@ -391,7 +431,7 @@ class StockSplitEvent(ReportEvent):
         symbol: str,
         shares_after_split: Decimal,
     ):
-        super().__init__(date, 4)
+        super().__init__(date, EventPriority.STOCK_SPLIT)
         self.symbol = symbol
         self.shares_after_split = shares_after_split
 
