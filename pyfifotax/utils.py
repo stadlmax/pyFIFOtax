@@ -250,7 +250,7 @@ def read_data(sub_dir, file_name):
 
         dtypes = ESPPRow.type_dict()
         dtypes["date"] = None
-        print(dtypes)
+
         df_espp = pd.read_excel(
             xls, sheet_name="espp", parse_dates=["date"], dtype=dtypes
         )
