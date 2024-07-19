@@ -4,12 +4,13 @@ import datetime
 import requests
 import zipfile
 import decimal
-import warnings
 from dataclasses import dataclass
 from typing import Optional, Union
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import logging
+
 
 from pyfifotax.data_structures_dataframe import (
     ESPPRow,
@@ -20,6 +21,8 @@ from pyfifotax.data_structures_dataframe import (
     CurrencyConversionRow,
     MoneyTransferRow,
 )
+
+logger = logging.getLogger("pyfifotax")
 
 
 def get_date(forex):
@@ -159,11 +162,9 @@ def read_data_legacy(sub_dir, file_name):
             else "currency conversion to EUR"
         )
         if forex_sheet == "wire_transfers":
-            warnings.warn(
+            logger.warning(
                 '"wire_transfers" as a sheet name is deprecated and discouraged; '
-                'use "currency conversion to EUR" instead',
-                DeprecationWarning,
-            )
+                'use "currency conversion to EUR" instead')
 
         dtypes = {
             "date": None,

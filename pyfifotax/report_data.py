@@ -1,7 +1,7 @@
 import os
-import warnings
 import datetime
 import pandas as pd
+import logging
 
 import pyfifotax.data_structures_awv as awv
 from pyfifotax.data_structures_event import (
@@ -38,6 +38,8 @@ from pyfifotax.utils import (
 )
 from pyfifotax.utils import to_decimal
 from pyfifotax.historic_price_utils import get_splits_for_symbol
+
+logger = logging.getLogger("pyfifotax")
 
 
 class ReportData:
@@ -136,7 +138,7 @@ class ReportData:
             msg += " an old 'deposit' with 'fee != 0' is assumed to be a buy order and 'fee = 0' is seen as"
             msg += " a RSU deposit. This should make the behavior of the Tax Reporting identical. If this "
             msg += " does not fit your needs, please adopt the new format of transactions as shown in the example."
-            warnings.warn(msg, DeprecationWarning)
+            logger.warning(msg)
             raw_data = read_data_legacy(self.sub_dir, self.file_name)
 
         used_symbols = []
@@ -205,6 +207,7 @@ class ReportData:
 
         if self.apply_stock_splits:
             split_dfs = []
+            logger.info("Downloading stock split information")
             for symbol in used_symbols:
                 splits = get_splits_for_symbol(symbol, most_recent_date)
                 if splits is not None:
@@ -233,6 +236,7 @@ class ReportData:
     def process_report_events(self):
         for event in self.report_events:
             if isinstance(event, RSUEvent):
+                logger.info(event)
                 self.held_shares[event.symbol].push(event.received_shares)
 
                 bonus = awv.AWVEntryZ4RSUBonus(
@@ -264,6 +268,7 @@ class ReportData:
                     self.awv_z10_events.append(withheld_shares)
 
             elif isinstance(event, ESPPEvent):
+                logger.info(event)
                 self.held_shares[event.symbol].push(event.received_shares)
 
                 bonus = awv.AWVEntryZ4ESPPBonus(
@@ -285,6 +290,7 @@ class ReportData:
                 self.awv_z10_events.append(bought_shares)
 
             elif isinstance(event, DividendEvent):
+                logger.info(event)
                 if event.received_dividend is not None:
                     if event.received_dividend.amount > 0:
                         div = FIFOForex(
@@ -307,6 +313,9 @@ class ReportData:
                 # dividends should be small enough to not trigger AWV reportings
 
             elif isinstance(event, TaxEvent):
+                if event.withheld_tax or event.reverted_tax:
+                    logger.info(event)
+
                 if event.withheld_tax is not None:
                     self.held_forex[event.currency].pop(
                         event.withheld_tax.amount, to_decimal(1), event.date
@@ -324,6 +333,7 @@ class ReportData:
                     self.misc["Tax Withholding"].append(tmp)
 
             elif isinstance(event, BuyEvent):
+                logger.info(event)
                 # if not enough money, pop on FOREX Queue will fail
                 tmp = self.held_forex[event.currency].pop(
                     event.cost_of_shares,
@@ -350,6 +360,7 @@ class ReportData:
                 )
 
             elif isinstance(event, SellEvent):
+                logger.info(event)
                 # if not enough shares to sell, pop on SHARE Queue will fail
                 if event.paid_fees is not None:
                     sell_cost = event.paid_fees.amount / event.quantity
@@ -387,6 +398,7 @@ class ReportData:
                 )
 
             elif isinstance(event, MoneyDepositEvent):
+                logger.info(event)
                 if event.amount > 0:
                     new_forex = FIFOForex(
                         currency=event.currency,
@@ -407,6 +419,7 @@ class ReportData:
                     self.misc["Fees"].append(event.fees)
 
             elif isinstance(event, MoneyWithdrawalEvent):
+                logger.info(event)
                 if event.amount > 0.0:
                     tmp = self.held_forex[event.currency].pop(
                         event.amount,
@@ -423,6 +436,7 @@ class ReportData:
                     self.misc["Fees"].append(event.fees)
 
             elif isinstance(event, CurrencyConversionEvent):
+                logger.info(event)
                 sold_forex = self.held_forex[event.source_currency].pop(
                     event.source_amount, to_decimal(1), event.date
                 )
@@ -450,6 +464,7 @@ class ReportData:
                     self.misc["Fees"].append(event.fees)
 
             elif isinstance(event, StockSplitEvent):
+                logger.info(event)
                 if self.apply_stock_splits:
                     self.held_shares[event.symbol].apply_split(event.shares_after_split)
 
@@ -525,7 +540,7 @@ class ReportData:
             msg += " the difference between buy_price and fair_market_value for ESPP which allows"
             msg += " to automatically calculate your own contribution and the company bonus."
             msg += " For AWV reports, please switch to the new format."
-            warnings.warn(msg)
+            logger.warning(msg)
             return None, None
 
         for e in self.awv_z4_events:
@@ -557,7 +572,7 @@ class ReportData:
             msg += " the difference between buy_price and fair_market_value for ESPP which allows"
             msg += " to automatically calculate your own contribution and the company bonus."
             msg += " For AWV reports, please switch to the new format."
-            warnings.warn(msg)
+            logger.warning(msg)
             return
 
         df_z4, df_z10 = self.consolidate_awv_events(report_year, awv_threshold_eur)

@@ -1,5 +1,7 @@
-import pytest
+import logging
+
 import numpy as np
+import pytest
 from numpy.testing import assert_allclose
 
 from pyfifotax.report_data import ReportData
@@ -38,9 +40,10 @@ order_file_names_legacy = [
 
 
 @pytest.mark.parametrize("file_name", order_file_names_legacy)
-def test_summarize_report_order(file_name):
-    with pytest.deprecated_call():
+def test_summarize_report_order(file_name, caplog):
+    with caplog.at_level(logging.WARNING):
         summary = get_elster_summary(file_name, 2022, "daily")
+        assert "legacy" in caplog.text
         assert_allclose(summary, [-297.27, 48.35, 347.51, 0.29, 0, 0, 0, 0])
 
 
@@ -76,14 +79,15 @@ example_outputs = [
 
 
 @pytest.mark.parametrize("mode, consider_tax_free_forex, desired", example_outputs)
-def test_summarize_report_example_legacy(mode, consider_tax_free_forex, desired):
-    with pytest.deprecated_call():
+def test_summarize_report_example_legacy(mode, consider_tax_free_forex, desired, caplog):
+    with caplog.at_level(logging.WARNING):
         summary = get_elster_summary(
             "example_legacy.xlsx",
             2022,
             mode,
             consider_tax_free_forex=consider_tax_free_forex,
         )
+        assert "legacy" in caplog.text
         assert_allclose(summary, desired)
 
 
@@ -164,18 +168,20 @@ def test_example_partial(file_name):
             assert_allclose(summary, [0, 0, 0, 0, 0, 0, 0, 0])
 
 
-def test_summarize_forex_simple_legacy():
-    with pytest.deprecated_call():
+def test_summarize_forex_simple_legacy(caplog):
+    with caplog.at_level(logging.WARNING):
         summary = get_elster_summary("forex_simple_legacy.xlsx", 2022, "daily")
+        assert "legacy" in caplog.text
         assert_allclose(summary, [-1, 0, 1, 0, 15, 0, 3002.8, 3002.8])
 
 
-def test_summarize_forex_next_exchange_date_legacy():
+def test_summarize_forex_next_exchange_date_legacy(caplog):
     # Earliest imported exchange date: 2009-01-02
-    with pytest.deprecated_call():
+    with caplog.at_level(logging.WARNING):
         summary = get_elster_summary(
             "forex_next_exchange_date_legacy.xlsx", 2022, "daily"
         )
+        assert "legacy" in caplog.text
         assert_allclose(summary, [0, 0, 0, 0, 0, 0, 97.69, 97.69])
 
 
@@ -195,7 +201,6 @@ exception_outputs_legacy = [
 ]
 
 
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.parametrize("file_name, error_msg", exception_outputs_legacy)
 def test_summarize_exception_legacy(file_name, error_msg):
     with pytest.raises(ValueError, match=error_msg):
@@ -214,10 +219,11 @@ def test_empty():
         raise pytest.fail(f"EMPTY TEST FAILED, DID RAISE {e}")
 
 
-def test_empty_legacy():
+def test_empty_legacy(caplog):
     try:
-        with pytest.deprecated_call():
+        with caplog.at_level(logging.WARNING):
             get_elster_summary("example_legacy_empty.xlsx", 2022, "daily")
+            assert "legacy" in caplog.text
     except Exception as e:
         raise pytest.fail(f"EMPTY TEST FAILED, DID RAISE {e}")
 
@@ -232,11 +238,12 @@ just_test_success_files = [
 
 
 @pytest.mark.parametrize("file_name, legacy_mode", just_test_success_files)
-def test_success(file_name, legacy_mode):
+def test_success(file_name, legacy_mode, caplog):
     try:
         if legacy_mode:
-            with pytest.deprecated_call():
+            with caplog.at_level(logging.WARNING):
                 get_elster_summary("example_legacy_empty.xlsx", 2022, "daily")
+                assert "legacy" in caplog.text
         else:
             get_elster_summary(file_name, 2022, "daily")
     except Exception as e:

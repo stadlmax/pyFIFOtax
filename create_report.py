@@ -1,6 +1,10 @@
 import argparse
+import logging
+import sys
 
 from pyfifotax.report_data import ReportData
+
+logger = logging.getLogger("pyfifotax")
 
 
 parser = argparse.ArgumentParser(
@@ -44,9 +48,25 @@ parser.add_argument(
         " Overrides both 'rate_mode' and 'report_year'."
     ),
 )
+parser.add_argument(
+    "--log-level",
+    choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    default="WARNING",
+    dest="log_level",
+    help="sets the logging level. Default: warning",
+)
 
+def setup_logging(log_level: str):
+    logging.basicConfig(stream=sys.stdout, format="[%(levelname)-8s] %(message)s")
+    logger.setLevel(log_level)
 
-def main(sub_dir, file_name, report_year, rate_mode, create_all_reports):
+def exception_hook(type, value, traceback):
+    logger.critical(value, exc_info=(type, value, traceback))
+
+def main(sub_dir, file_name, report_year, rate_mode, create_all_reports, log_level):
+    setup_logging(log_level)
+    sys.excepthook = exception_hook
+
     report = ReportData(sub_dir=sub_dir, file_name=file_name)
     if create_all_reports:
         report.create_all_reports()
@@ -66,4 +86,5 @@ if __name__ == "__main__":
         args.report_year,
         args.rate_mode,
         args.all,
+        args.log_level,
     )
