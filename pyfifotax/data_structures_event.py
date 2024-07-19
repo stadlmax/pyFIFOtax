@@ -98,6 +98,12 @@ class RSUEvent(ReportEvent):
             withheld_shares,
         )
 
+    def __repr__(self):
+        shares = self.received_shares
+        total = shares.quantity * shares.buy_price
+        withheld = f" (+{self.withheld_shares.quantity:g} shares withheld)"
+        return f"RSU vested on {self.date}: {shares.quantity:g} {self.symbol} for {total:.2f} {shares.currency}{withheld}"
+
 
 class DividendEvent(ReportEvent):
     def __init__(
@@ -125,6 +131,10 @@ class DividendEvent(ReportEvent):
             return DividendEvent(row.date, row.currency, div)
 
         return DividendEvent(row.date, row.currency, None)
+
+    def __repr__(self):
+        amount = f": {self.received_dividend.amount:.2f} {self.received_dividend.currency}" if self.received_dividend else ""
+        return f"Dividend received on {self.date}{amount}"
 
 
 class TaxEvent(ReportEvent):
@@ -182,6 +192,19 @@ class TaxEvent(ReportEvent):
             None,
         )
 
+    def __repr__(self):
+        if not self.withheld_tax and not self.reverted_tax:
+            return ""
+
+        if self.withheld_tax:
+            tax_type = "withholding"
+            amount = f"{self.withheld_tax.amount:.2f} {self.withheld_tax.currency} tax withheld"
+        else:
+            tax_type = "reversal"
+            amount = f"{self.reverted_tax.quantity:.2f} {self.reverted_tax.currency} tax reverted"
+
+        return f"Tax {tax_type} on {self.date}: {amount}"
+
 
 class ESPPEvent(ReportEvent):
     def __init__(
@@ -228,6 +251,14 @@ class ESPPEvent(ReportEvent):
             contribution=contribution,
             bonus=bonus,
         )
+
+    def __repr__(self):
+        shares = self.received_shares
+        quantity = shares.quantity
+        currency = shares.currency
+        total = quantity * shares.buy_price
+        bonus = f"(out of which the bonus is {self.bonus:.2f} {currency})"
+        return f"ESPP received on {self.date}: {quantity:g} {self.symbol} for {total:.2f} {currency} {bonus}"
 
 
 class BuyEvent(ReportEvent):
@@ -293,6 +324,12 @@ class BuyEvent(ReportEvent):
             currency=row.currency,
         )
 
+    def __repr__(self):
+        shares = self.received_shares
+        details = f"{shares.quantity:.2f} {shares.symbol} for {shares.buy_price:.2f} {shares.currency}"
+        fees = f" for {self.paid_fees.amount:.2f} {self.paid_fees.currency} additional fee" if self.paid_fees else ""
+        return f"Bought securities on {self.date}: {details} (Σ {self.cost_of_shares:.2f} {shares.currency}){fees}"
+
 
 class SellEvent(ReportEvent):
     def __init__(
@@ -348,6 +385,11 @@ class SellEvent(ReportEvent):
         return SellEvent(
             row.date, row.symbol, row.currency, quantity, sell_price, new_forex, fees
         )
+
+    def __repr__(self):
+        fees = f" for {self.paid_fees.amount:.2f} {self.paid_fees.currency} additional fee" if self.paid_fees else ""
+        total = f" (Σ {self.sell_price * self.quantity:.2f} {self.currency})"
+        return f"Sold securities on {self.date}: {self.quantity} {self.symbol}{total}{fees}"
 
 
 class CurrencyConversionEvent(ReportEvent):
@@ -447,6 +489,13 @@ class CurrencyConversionEvent(ReportEvent):
         )
         raise ValueError(msg)
 
+    def __repr__(self):
+        fees = f"for an additional {self.fees.amount:.2f} {self.fees.currency} fee" if self.fees else ""
+
+        from_fx = f"from {self.source_amount:.2f} {self.source_currency}"
+        to_fx = f"to {self.target_amount:.2f} {self.target_currency}"
+        return f"Converted money on {self.date}: {from_fx} {to_fx} {fees}"
+
 
 class MoneyTransferEvent(ReportEvent):
     def __init__(
@@ -500,6 +549,12 @@ class MoneyDepositEvent(MoneyTransferEvent):
             date, buy_date, amount, fees, currency, EventPriority.MONEY_DEPOSIT
         )
 
+    def __repr__(self):
+        amount = abs(self.amount)
+        acquired = f" which was acquired on {self.buy_date}" if self.buy_date.year >= 2009 else ""
+        fees = f" for {self.fees} {self.fees.currency} additional fee" if self.fees else ""
+        return f"Deposited money on {self.date}: {amount:.2f} {self.currency}{acquired}{fees}"
+
 
 class MoneyWithdrawalEvent(MoneyTransferEvent):
     def __init__(
@@ -513,6 +568,12 @@ class MoneyWithdrawalEvent(MoneyTransferEvent):
         super().__init__(
             date, buy_date, amount, fees, currency, EventPriority.MONEY_WITHDRAWAL
         )
+
+    def __repr__(self):
+        amount = abs(self.amount)
+        acquired = f" which was acquired on {self.buy_date}" if self.buy_date.year >= 2009 else ""
+        fees = f" for {self.fees.amount:.2f} {self.fees.currency} additional fee" if self.fees else ""
+        return f"Withdrew money on {self.date}: {amount:.2f} {self.currency}{acquired}{fees}"
 
 
 class StockSplitEvent(ReportEvent):
@@ -534,3 +595,6 @@ class StockSplitEvent(ReportEvent):
             symbol=row.symbol,
             shares_after_split=to_decimal(row.shares_after_split),
         )
+
+    def __repr__(self):
+        return f"Stock split happened on {self.date}: 1 {self.symbol} became {self.shares_after_split:.2f}"

@@ -1,8 +1,9 @@
 import math
 import decimal
 import datetime
-import warnings
 from typing import Optional
+import logging
+logger = logging.getLogger("pyfifotax")
 
 from pyfifotax.utils import to_decimal
 
@@ -86,7 +87,7 @@ class FIFOForex(FIFOObject):
         self.tax_free_forex = tax_free_forex
 
     def __repr__(self):
-        return f"{self.symbol}(Quantity: {self.quantity:.2f}, Buy-Date: {self.buy_date:%Y-%b-%d})"
+        return f"{self.symbol}(Quantity: {self.quantity:.2f}, Buy-Date: {self.buy_date})"
 
 
 # class representing a share subject to FIFO treatment
@@ -95,7 +96,7 @@ class FIFOShare(FIFOObject):
         super().__init__(symbol, quantity, buy_date, buy_price, currency)
 
     def __repr__(self):
-        return f"{self.symbol}(Quantity: {self.quantity}, Buy-Date: {self.buy_date:%Y-%b-%d}, Buy-Price: {self.buy_price:.2f} {self.currency})"
+        return f"{self.symbol} (Quantity: {self.quantity:.2f}, Buy date: {self.buy_date}, Buy price: {self.buy_price:.2f} {self.currency})"
 
 
 class FIFOQueue:
@@ -118,7 +119,16 @@ class FIFOQueue:
             asset.buy_price = asset.buy_price / shares_after_split
             self.total_quantity = self.total_quantity + asset.quantity
 
+    def log_push(self, asset: FIFOObject):
+        acquired = f" on {asset.buy_date}" if asset.buy_date.year >= 2009 else ""
+        total = f"[Σ {self.total_quantity + asset.quantity:.2f} {asset.symbol}{acquired}]"
+        price = f" which was acquired for {asset.buy_price:.2f} {asset.currency} per share" if asset.symbol != asset.currency and asset.buy_price != to_decimal(1) else ""
+
+        logger.debug(f"{total} Pushing {asset.quantity:.2f} {asset.symbol} to the queue{price}")
+
     def push(self, asset: FIFOObject):
+        self.log_push(asset)
+
         if self.is_empty():
             self.assets = [asset]
 
@@ -144,6 +154,24 @@ class FIFOQueue:
             raise ValueError("Cannot peek first element from an empty queue.")
         return self.assets[0]
 
+    def log_pop(self, quantity: decimal.Decimal, front_quantity: decimal.Decimal, sell_price: decimal.Decimal, sell_date: datetime.date):
+        currency = self.peek().currency
+        symbol = self.peek().symbol
+
+        if quantity < front_quantity or math.isclose(quantity, front_quantity):
+            current_quantity = quantity
+            full_quantity = ""
+        else:
+            current_quantity = self.peek().quantity
+            remainder = f", {quantity - current_quantity:.2f} still to be popped"
+            full_quantity = f" (as a part of {quantity:.2f} {symbol}{remainder})"
+
+        acquired = f" on {sell_date}" if sell_date.year >= 2009 else ""
+        total = self.total_quantity - current_quantity
+        total = f"[Σ {0 if math.isclose(total, 0, abs_tol=1e-8) else total:.2f} {symbol}{acquired}]"
+        price = f" which was sold for for {sell_price:.2f} {currency} per share" if symbol != currency and sell_price != to_decimal(1) else ""
+        logger.debug(f"{total} Popping {current_quantity:.2f} {symbol}{full_quantity} from the queue{price}")
+
     def pop(
         self,
         quantity: decimal.Decimal,
@@ -153,8 +181,9 @@ class FIFOQueue:
         sell_cost_currency: Optional[str] = None,
     ):
         if self.is_eur_queue:
+            self.log_pop(quantity, quantity, sell_price, sell_date)
             pop_asset = from_asset(self.peek(), quantity)
-            # not really relevant, but leave them anyways
+            # not really relevant, but leave them anyway
             pop_asset.sell_price = sell_price
             pop_asset.sell_date = sell_date
             if sell_cost is not None:
@@ -171,7 +200,7 @@ class FIFOQueue:
             raise ValueError("Cannot sell negative amount of equity")
 
         if quantity > 0 and self.is_empty():
-            raise ValueError(f"Cannot sell equities because there isn't any owned")
+            raise ValueError("Cannot sell equities because there isn't any owned")
 
         if (
             not math.isclose(quantity, self.total_quantity)
@@ -188,10 +217,12 @@ class FIFOQueue:
                 # erroring out for rather small differences, we'll allow for
                 # rounding errors below 1 currency unit
                 if quantity < self.total_quantity + to_decimal(1.0):
-                    msg = f"Trying to convert {quantity:.2f} {symbol}"
-                    msg += f" despite only owning {self.total_quantity} {symbol}."
-                    msg += " Assuming that this minor difference comes from rounding errors, proceeding with rounding down."
-                    warnings.warn(msg)
+                    msg = (f"Trying to convert {quantity:.2f} {symbol} "
+                           f"despite only owning {self.total_quantity:.2f} {symbol}.\nAssuming that this minor "
+                           f"difference comes from rounding errors, proceeding with rounding down.")
+                    logger.warning(msg)
+
+                    self.log_pop(self.total_quantity, self.total_quantity, sell_price, sell_date)
                     return self.pop(self.total_quantity, sell_price, sell_date)
                 raise ValueError(
                     f"Cannot convert more {symbol} ({quantity:.2f}) than owned overall ({self.total_quantity:.2f})."
@@ -210,6 +241,9 @@ class FIFOQueue:
             )
 
         front_quantity = self.peek().quantity
+
+        self.log_pop(quantity, front_quantity, sell_price, sell_date)
+
         if quantity < front_quantity:
             pop_asset = from_asset(self.peek(), quantity)
             pop_asset.sell_price = sell_price

@@ -1,13 +1,14 @@
 import os
 import datetime
 import decimal
+import logging
 import pandas as pd
 import hashlib
 import logging
 import time
 import yfinance as yf
 from pathlib import Path
-
+logger = logging.getLogger("pyfifotax")
 
 def get_reverse_splits(splits: pd.Series):
     rev_splits = splits.prod() / splits.cumprod()
@@ -110,6 +111,7 @@ class YFinanceCacheManager:
             self.update()
 
         try:
+            logger.debug(f"Retrieving stock split and history information for {ticker}")
             ticker_hist_file = self._get_hist_file_path(ticker)
             ticker_splits_file = self._get_splits_file_path(ticker)
             ticker_true_hist_file = self._get_true_hist_file_path(ticker)
