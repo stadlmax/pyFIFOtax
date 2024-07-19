@@ -1,9 +1,11 @@
 import decimal
-import warnings
+import logging
 
 import datetime
 
 from pyfifotax.utils import to_decimal, round_decimal, get_daily_rate
+
+logger = logging.getLogger("pyfifotax")
 
 
 class AWVEntry:
@@ -51,8 +53,8 @@ class AWVEntryZ4(AWVEntry):
         self.is_nvidia = is_nvidia
 
         if is_nvidia and currency != "USD":
-            warnings.warn(
-                f"Got currency {currency} for transaction with NVDA, check created reports properly for correctness."
+            logger.warning(
+                f"Got currency {currency} for transaction with NVDA, check created AWV Z4 reports properly for correctness."
             )
 
     def as_dict(self):
@@ -103,8 +105,8 @@ class AWVEntryZ10(AWVEntry):
         self.is_nvidia = is_nvidia
 
         if is_nvidia and currency != "USD":
-            warnings.warn(
-                f"Got currency {currency} for transaction with NVDA, check created reports properly for correctness."
+            logger.warning(
+                f"Got currency {currency} for transaction with NVDA, check created AWV Z10 reports properly for correctness."
             )
 
     def as_dict(self):
