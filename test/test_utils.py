@@ -139,10 +139,22 @@ def test_empty_legacy():
         raise pytest.fail(f"EMPTY TEST FAILED, DID RAISE {e}")
 
 
-def test_deposit_convert_withdraw_same_day():
+just_test_success_files = [
+    ("example_legacy_empty.xlsx", True),
+    ("example_empty.xlsx", False),
+    ("forex_deposit_convert_withdraw_same_day.xlsx", False),
+    ("forex_first.xlsx", False),
+    ("sell_others_first.xlsx", False),
+]
+
+
+@pytest.mark.parametrize("file_name, legacy_mode", just_test_success_files)
+def test_success(file_name, legacy_mode):
     try:
-        get_elster_summary(
-            "forex_deposit_convert_withdraw_same_day.xlsx", 2022, "daily"
-        )
+        if legacy_mode:
+            with pytest.deprecated_call():
+                get_elster_summary("example_legacy_empty.xlsx", 2022, "daily")
+        else:
+            get_elster_summary(file_name, 2022, "daily")
     except Exception as e:
-        raise pytest.fail(f"EMPTY TEST FAILED, DID RAISE {e}")
+        raise pytest.fail(f"SUCCESS TEST FOR {file_name} FAILED, DID RAISE {e}")

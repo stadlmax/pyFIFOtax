@@ -11,6 +11,8 @@ from pyfifotax.data_structures_event import (
     BuyEvent,
     SellEvent,
     CurrencyConversionEvent,
+    CurrencyConversionEventFromEURToForex,
+    CurrencyConversionEventFromForexToEUR,
     MoneyDepositEvent,
     MoneyWithdrawalEvent,
     MoneyTransferEvent,
@@ -286,6 +288,7 @@ class ReportData:
                 # dividends should be small enough to not trigger AWV reportings
 
             elif isinstance(event, BuyEvent):
+                print(self.held_forex[event.currency])
                 # if not enough money, pop on FOREX Queue will fail
                 tmp = self.held_forex[event.currency].pop(
                     event.cost_of_shares,
@@ -348,43 +351,40 @@ class ReportData:
             elif isinstance(event, MoneyWithdrawalEvent):
                 if event.fees is not None:
                     self.misc["Fees"].append(event.fees)
-                tmp = self.held_forex[event.currency].pop(
-                    event.amount,
-                    to_decimal(1),
-                    event.date,
-                )
-                self.withdrawn_forex[event.currency].extend(tmp)
-
-            elif isinstance(event, CurrencyConversionEvent):
-                if not (
-                    event.source_currency == "EUR" or event.target_currency == "EUR"
-                ):
-                    msg = "Only support currency conversions between one foreign currency and EUR"
-                    msg += f" but got {event.source_currency} and {event.target_currency} respectively."
-                    raise ValueError(msg)
-
-                if event.source_currency == "EUR":
-                    # "buy" forex
-                    new_forex = FIFOForex(
-                        currency=event.target_currency,
-                        quantity=event.foreign_amount,
-                        buy_date=event.date,
-                        source=f"Currency Conversion EUR to {event.target_currency}",
-                    )
-                    self.held_forex[event.target_currency].push(new_forex)
-                    if event.source_fees is not None:
-                        self.misc["Fees"].append(event.source_fees)
-
-                else:
-                    # "sell" forex
-                    tmp = self.held_forex[event.source_currency].pop(
-                        event.foreign_amount,
+                try:
+                    tmp = self.held_forex[event.currency].pop(
+                        event.amount,
                         to_decimal(1),
                         event.date,
                     )
-                    self.sold_forex[event.source_currency].extend(tmp)
-                    if event.source_fees is not None:
-                        self.misc["Fees"].append(event.source_fees)
+                except ValueError:
+                    raise ValueError(
+                        f"Cannot withdraw {event.amount} {event.currency}, not enough owned."
+                    )
+                self.withdrawn_forex[event.currency].extend(tmp)
+
+            elif isinstance(event, CurrencyConversionEventFromEURToForex):
+                # "buy" forex (note: EUR used up not tracked)
+                new_forex = FIFOForex(
+                    currency=event.target_currency,
+                    quantity=event.foreign_amount,
+                    buy_date=event.date,
+                    source=f"Currency Conversion EUR to {event.target_currency}",
+                )
+                self.held_forex[event.target_currency].push(new_forex)
+                if event.source_fees is not None:
+                    self.misc["Fees"].append(event.source_fees)
+
+            elif isinstance(event, CurrencyConversionEventFromForexToEUR):
+                # "sell" forex (note: EUR received not tracked)
+                tmp = self.held_forex[event.source_currency].pop(
+                    event.foreign_amount,
+                    to_decimal(1),
+                    event.date,
+                )
+                self.sold_forex[event.source_currency].extend(tmp)
+                if event.source_fees is not None:
+                    self.misc["Fees"].append(event.source_fees)
 
             elif isinstance(event, StockSplitEvent):
                 if self.apply_stock_splits:
