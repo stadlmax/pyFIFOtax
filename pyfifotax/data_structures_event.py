@@ -24,22 +24,16 @@ from pyfifotax.utils import to_decimal, round_decimal
 
 
 class EventPriority(Enum):
-    # add priority to make sure that buy/deposit transactions
-    # are processed before sell transactions
-    # espp/rsu deposit/dividend: prio 0
-    # sell: prio 1
-    # currency conversions: 2
-    # buy: prio 3
-    # stocksplit: 4 (at the end as assumed after market-close)
     ESPP: int = 0
     RSU: int = 0
     DIVIDEND: int = 1
-    MONEY_DEPOSIT: int = 2
-    BUY: int = 3
-    SELL: int = 4
-    CURRENCY_CONVERSION = 5
+    MONEY_DEPOSIT: int = 1
+    CURRENCY_CONVERSION_FROM_EUR_TO_FOREX = 2
+    SELL: int = 3
+    BUY: int = 4
+    CURRENCY_CONVERSION_FROM_FOREX_TO_EUR = 5
     MONEY_WITHDRAWAL: int = 6
-    STOCK_SPLIT: int = 7
+    STOCK_SPLIT: int = 7  # at the end as assumed after market-close
 
 
 class ReportEvent:
@@ -327,8 +321,9 @@ class CurrencyConversionEvent(ReportEvent):
         source_fees: Optional[Forex],
         source_currency: str,
         target_currency: str,
+        priority: EventPriority,
     ):
-        super().__init__(date, EventPriority.CURRENCY_CONVERSION)
+        super().__init__(date, priority)
         self.foreign_amount = foreign_amount
         self.source_fees = source_fees
         self.source_currency = source_currency
@@ -351,12 +346,60 @@ class CurrencyConversionEvent(ReportEvent):
         else:
             source_fees = None
 
-        return CurrencyConversionEvent(
-            row.date,
-            to_decimal(row.foreign_amount),
+        if row.source_currency == "EUR" and row.target_currency != "EUR":
+            return CurrencyConversionEventFromEURToForex(
+                row.date,
+                to_decimal(row.foreign_amount),
+                source_fees,
+                row.target_currency,
+            )
+
+        if row.source_currency != "EUR" and row.target_currency == "EUR":
+            return CurrencyConversionEventFromForexToEUR(
+                row.date,
+                to_decimal(row.foreign_amount),
+                source_fees,
+                row.source_currency,
+            )
+
+        msg = "Only support currency conversions between one foreign currency and EUR"
+        msg += f" but got {row.source_currency} and {row.target_currency} respectively."
+        raise ValueError(msg)
+
+
+class CurrencyConversionEventFromEURToForex(CurrencyConversionEvent):
+    def __init__(
+        self,
+        date: datetime,
+        foreign_amount: decimal.Decimal,
+        source_fees: Optional[Forex],
+        target_currency: str,
+    ):
+        super().__init__(
+            date,
+            foreign_amount,
             source_fees,
-            row.source_currency,
-            row.target_currency,
+            "EUR",
+            target_currency,
+            EventPriority.CURRENCY_CONVERSION_FROM_EUR_TO_FOREX,
+        )
+
+
+class CurrencyConversionEventFromForexToEUR(CurrencyConversionEvent):
+    def __init__(
+        self,
+        date: datetime,
+        foreign_amount: decimal.Decimal,
+        source_fees: Optional[Forex],
+        source_currency: str,
+    ):
+        super().__init__(
+            date,
+            foreign_amount,
+            source_fees,
+            source_currency,
+            "EUR",
+            EventPriority.CURRENCY_CONVERSION_FROM_FOREX_TO_EUR,
         )
 
 
