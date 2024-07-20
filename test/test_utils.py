@@ -137,3 +137,12 @@ def test_empty_legacy():
             get_elster_summary("example_legacy_empty.xlsx", 2022, "daily")
     except Exception as e:
         raise pytest.fail(f"EMPTY TEST FAILED, DID RAISE {e}")
+
+
+def test_deposit_convert_withdraw_same_day():
+    try:
+        get_elster_summary(
+            "forex_deposit_convert_withdraw_same_day.xlsx", 2022, "daily"
+        )
+    except Exception as e:
+        raise pytest.fail(f"EMPTY TEST FAILED, DID RAISE {e}")
