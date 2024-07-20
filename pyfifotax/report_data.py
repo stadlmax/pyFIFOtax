@@ -27,13 +27,12 @@ from pyfifotax.utils import (
     apply_rates_transact_dict,
     filter_transact_dict,
     transact_dict_to_df,
-)
-from pyfifotax.utils import (
     get_reference_rates,
     read_data,
     read_data_legacy,
     write_report,
     write_report_awv,
+    create_report_sheet,
 )
 from pyfifotax.utils import to_decimal
 
@@ -70,6 +69,7 @@ class ReportData:
         # list of foreign currencies: dividend payments and sell orders
         self.held_forex: dict[str, FIFOQueue] = {}
         self.sold_forex: dict[str, list] = {}
+        self.withdrawn_forex: dict[str, list] = {}
         # Besides maintaining a list of ingoing and outgoing streams
         # of "foreign" currencies, we keep separate lists
         # - fees (pot. Werbungskosten),
@@ -194,6 +194,7 @@ class ReportData:
             c: FIFOQueue(is_eur_queue=c == "EUR") for c in used_currencies
         }
         self.sold_forex = {c: [] for c in used_currencies}
+        self.withdrawn_forex = {c: [] for c in used_currencies}
 
         # first, just create all events from raw data
         self.report_events.extend(RSUEvent.from_report(raw_data.rsu))
@@ -345,14 +346,14 @@ class ReportData:
                     self.misc["Fees"].append(event.fees)
 
             elif isinstance(event, MoneyWithdrawalEvent):
-                # just pop, don't handle currency
                 if event.fees is not None:
                     self.misc["Fees"].append(event.fees)
-                self.held_forex[event.currency].pop(
+                tmp = self.held_forex[event.currency].pop(
                     event.amount,
                     to_decimal(1),
                     event.date,
                 )
+                self.withdrawn_forex[event.currency].extend(tmp)
 
             elif isinstance(event, CurrencyConversionEvent):
                 if not (
@@ -497,9 +498,33 @@ class ReportData:
             report_file_name,
         )
 
+    def create_withdrawal_report(self):
+        values = {
+            "withdrawal_date": [],
+            "buy_date": [],
+            "amount": [],
+            "currency": [],
+        }
+
+        for cur, val in self.withdrawn_forex.items():
+            for v in val:
+                values["withdrawal_date"].append(v.sell_date)
+                values["buy_date"].append(v.buy_date)
+                values["amount"].append(v.quantity)
+                values["currency"].append(cur)
+
+        df = pd.DataFrame(values)
+        df.sort_values(["withdrawal_date", "buy_date"])
+
+        report_path = os.path.join(self.sub_dir, "withdrawals.xlsx")
+        with pd.ExcelWriter(
+            report_path, engine="xlsxwriter", datetime_format="yyyy-mm-dd"
+        ) as writer:
+            create_report_sheet("withdrawals", df, writer)
+
     def create_all_reports(self, s, awv_threshold_eur=12_500):
         report_years = self.report_years
-
+        self.create_withdrawal_report()
         for year in report_years:
             if not self.legacy_mode:
                 file_name = f"awv_report_{year}.xlsx"
