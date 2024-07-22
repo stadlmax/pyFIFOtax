@@ -591,6 +591,8 @@ def filter_transact_dict(trans_dict, report_year, speculative_period=None):
             if f.sell_date.year == report_year:
                 if speculative_period is None:
                     filtered_dict[k].append(f)
+                elif f.currency == "EUR":
+                    filtered_dict[k].append(f)
                 elif (f.sell_date - f.buy_date).days < speculative_period * 365:
                     filtered_dict[k].append(f)
 
