@@ -1,6 +1,6 @@
 import math
 import decimal
-from datetime import datetime
+import datetime
 from decimal import Decimal
 
 from pyfifotax.utils import to_decimal
@@ -10,7 +10,9 @@ from pyfifotax.utils import to_decimal
 # e.g. for keeping track of tax payments or
 # bookkeeping of other monetary items
 class Forex:
-    def __init__(self, currency: str, date: datetime, amount: Decimal, comment: str):
+    def __init__(
+        self, currency: str, date: datetime.date, amount: Decimal, comment: str
+    ):
         self.currency = currency
         self.date = date
         self.amount = amount
@@ -30,7 +32,7 @@ class FIFOObject:
         self,
         symbol: str,
         quantity: Decimal,
-        buy_date: datetime,
+        buy_date: datetime.date,
         buy_price: Decimal,
         currency: str,
     ):
@@ -52,13 +54,13 @@ class FIFOObject:
         return self.quantity * self.buy_price
 
     def total_sell_value(self):
-        return self.quantity * self.sell_price
+        return self.quantity * self.sell_sprice
 
 
 # class representing a FOREX object subject to FIFO treatment
 class FIFOForex(FIFOObject):
     def __init__(
-        self, currency: str, quantity: Decimal, buy_date: datetime, source: str
+        self, currency: str, quantity: Decimal, buy_date: datetime.date, source: str
     ):
         # "money" is always a single unit "money"
         super().__init__(currency, quantity, buy_date, to_decimal(1), currency)
@@ -84,7 +86,7 @@ class FIFOQueue:
         self.is_eur_queue = is_eur_queue
         if self.is_eur_queue:
             self.assets.append(
-                FIFOForex("EUR", to_decimal(0), datetime(1, 1, 1, 0), "init")
+                FIFOForex("EUR", to_decimal(0), datetime.date(1, 1, 1), "init")
             )
 
     def apply_split(self, shares_after_split: decimal.Decimal):
@@ -127,7 +129,7 @@ class FIFOQueue:
         self,
         quantity: decimal.Decimal,
         sell_price: decimal.Decimal,
-        sell_date: datetime,
+        sell_date: datetime.date,
     ):
         if self.is_eur_queue:
             pop_asset = from_asset(self.peek(), quantity)

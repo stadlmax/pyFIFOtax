@@ -2,7 +2,7 @@ import decimal
 import pandas as pd
 import warnings
 
-from datetime import datetime
+import datetime
 
 from pyfifotax.utils import to_decimal, round_decimal, get_daily_rate
 
@@ -35,7 +35,7 @@ class AWVEntry:
 class AWVEntryZ4(AWVEntry):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         purpose: str,
         value: decimal.Decimal,
         currency: str,
@@ -85,7 +85,7 @@ class AWVEntryZ4(AWVEntry):
 class AWVEntryZ10(AWVEntry):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         comment: str,
         quantity: decimal.Decimal,
         value: decimal.Decimal,
@@ -142,7 +142,7 @@ class AWVEntryZ10(AWVEntry):
 class AWVEntryZ10RSUDeposit(AWVEntryZ10):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         symbol: str,
         quantity: decimal.Decimal,
         value: decimal.Decimal,
@@ -167,7 +167,7 @@ class AWVEntryZ10RSUDeposit(AWVEntryZ10):
 class AWVEntryZ10RSUTaxWithholding(AWVEntryZ10):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         symbol: str,
         quantity: decimal.Decimal,
         value: decimal.Decimal,
@@ -192,7 +192,7 @@ class AWVEntryZ10RSUTaxWithholding(AWVEntryZ10):
 class AWVEntryZ10Sale(AWVEntryZ10):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         symbol: str,
         quantity: decimal.Decimal,
         value: decimal.Decimal,
@@ -217,7 +217,7 @@ class AWVEntryZ10Sale(AWVEntryZ10):
 class AWVEntryZ10Buy(AWVEntryZ10):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         symbol: str,
         quantity: decimal.Decimal,
         value: decimal.Decimal,
@@ -242,7 +242,7 @@ class AWVEntryZ10Buy(AWVEntryZ10):
 class AWVEntryZ10ESPPDeposit(AWVEntryZ10):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         symbol: str,
         quantity: decimal.Decimal,
         value: decimal.Decimal,
@@ -266,7 +266,7 @@ class AWVEntryZ10ESPPDeposit(AWVEntryZ10):
 
 class AWVEntryZ4ESPPBonus(AWVEntryZ4):
     def __init__(
-        self, date: datetime, symbol: str, value: decimal.Decimal, currency: str
+        self, date: datetime.date, symbol: str, value: decimal.Decimal, currency: str
     ):
         is_nvidia = "NVDA" in symbol
         super().__init__(
@@ -285,7 +285,7 @@ class AWVEntryZ4ESPPBonus(AWVEntryZ4):
 
 class AWVEntryZ4RSUBonus(AWVEntryZ4):
     def __init__(
-        self, date: datetime, symbol: str, value: decimal.Decimal, currency: str
+        self, date: datetime.date, symbol: str, value: decimal.Decimal, currency: str
     ):
         is_nvidia = "NVDA" in symbol
         super().__init__(

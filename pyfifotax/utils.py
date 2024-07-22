@@ -6,7 +6,6 @@ import zipfile
 import decimal
 import warnings
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import Optional, Union
 import pandas as pd
 import numpy as np
@@ -85,16 +84,14 @@ def get_reference_rates():
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
 
-def get_monthly_rate(
-    monthly_rates: pd.DataFrame, date: datetime.datetime, currency: str
-):
+def get_monthly_rate(monthly_rates: pd.DataFrame, date: datetime.date, currency: str):
     if currency == "EUR":
         return to_decimal(1)
 
     return to_decimal(monthly_rates[currency][date.year, date.month].item())
 
 
-def get_daily_rate(daily_rates: pd.DataFrame, date: datetime.datetime, currency: str):
+def get_daily_rate(daily_rates: pd.DataFrame, date: datetime.date, currency: str):
     if currency == "EUR":
         return to_decimal(1)
 
@@ -103,13 +100,13 @@ def get_daily_rate(daily_rates: pd.DataFrame, date: datetime.datetime, currency:
 
     # On currency settlement holidays exchanges don't operate. Go ahead and find the next valid settlement date
     for day_increase in range(1, 8):
-        day = date + timedelta(days=day_increase)
+        day = date + datetime.timedelta(days=day_increase)
 
         if day in daily_rates[currency]:
             return to_decimal(daily_rates[currency][day])
 
     raise ValueError(
-        f"{currency} currency exchange rate cannot be found for {date.date()} or for the following seven days"
+        f"{currency} currency exchange rate cannot be found for {date} or for the following seven days"
     )
 
 

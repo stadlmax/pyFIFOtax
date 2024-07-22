@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+import datetime
 from dataclasses import dataclass, asdict
 import pandas as pd
 import numpy as np
@@ -37,7 +37,7 @@ class DataFrameRow:
 
 @dataclass
 class ESPPRow(DataFrameRow):
-    date: datetime
+    date: datetime.date
     symbol: str
     buy_price: np.float64
     fair_market_value: np.float64
@@ -54,7 +54,7 @@ class ESPPRow(DataFrameRow):
                 "Could not convert ESPP information from Schwab JSON, expected TransactionDetails to be of length 1."
             )
         details = json_dict["TransactionDetails"][0]["Details"]
-        date = datetime.strptime(details["PurchaseDate"], "%m/%d/%Y")
+        date = datetime.datetime.strptime(details["PurchaseDate"], "%m/%d/%Y").date()
         buy_price = pd.to_numeric(details["PurchasePrice"].strip("$").replace(",", ""))
         fair_market_value = pd.to_numeric(
             details["PurchaseFairMarketValue"].strip("$").replace(",", "")
@@ -72,7 +72,13 @@ class ESPPRow(DataFrameRow):
     @staticmethod
     def default_dict() -> dict:
         return ESPPRow(
-            datetime(1, 1, 1), "", np.float64(0), np.float64(0), np.float64(0), "", ""
+            datetime.date(1, 1, 1),
+            "",
+            np.float64(0),
+            np.float64(0),
+            np.float64(0),
+            "",
+            "",
         ).to_dict()
 
     @staticmethod
@@ -90,7 +96,7 @@ class ESPPRow(DataFrameRow):
 
 @dataclass
 class RSURow(DataFrameRow):
-    date: datetime
+    date: datetime.date
     symbol: str
     gross_quantity: Optional[np.float64]
     net_quantity: np.float64
@@ -100,7 +106,7 @@ class RSURow(DataFrameRow):
 
     @staticmethod
     def from_schwab_lapse_json(json_dict: dict) -> tuple[RSURow, int]:
-        date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
+        date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
         symbol = json_dict["Symbol"]
         gross_quantity = pd.to_numeric(json_dict["Quantity"])
 
@@ -132,7 +138,7 @@ class RSURow(DataFrameRow):
 
     @staticmethod
     def from_schwab_deposit_json(json_dict: dict) -> tuple[RSURow, int]:
-        date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
+        date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
         symbol = json_dict["Symbol"]
         net_quantity = pd.to_numeric(json_dict["Quantity"])
         # to be set later
@@ -165,7 +171,13 @@ class RSURow(DataFrameRow):
     @staticmethod
     def default_dict() -> dict:
         return RSURow(
-            datetime(1, 1, 1), "", np.float64(0), np.float64(0), np.float64(0), "", ""
+            datetime.date(1, 1, 1),
+            "",
+            np.float64(0),
+            np.float64(0),
+            np.float64(0),
+            "",
+            "",
         ).to_dict()
 
     @staticmethod
@@ -183,7 +195,7 @@ class RSURow(DataFrameRow):
 
 @dataclass
 class DividendRow(DataFrameRow):
-    date: datetime
+    date: datetime.date
     symbol: str
     amount: np.float64
     tax_withholding: np.float64
@@ -192,7 +204,7 @@ class DividendRow(DataFrameRow):
 
     @staticmethod
     def from_schwab_json(json_dict: dict) -> DividendRow:
-        date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
+        date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
         symbol = json_dict["Symbol"]
         amount = pd.to_numeric(json_dict["Amount"].strip("$").replace(",", ""))
 
@@ -208,7 +220,7 @@ class DividendRow(DataFrameRow):
     @staticmethod
     def default_dict() -> dict:
         return DividendRow(
-            datetime(1, 1, 1), "", np.float64(0), np.float64(0), "", ""
+            datetime.date(1, 1, 1), "", np.float64(0), np.float64(0), "", ""
         ).to_dict()
 
     @staticmethod
@@ -225,14 +237,14 @@ class DividendRow(DataFrameRow):
 
 @dataclass
 class TaxWithholdingRow(DataFrameRow):
-    date: datetime
+    date: datetime.date
     symbol: str
     amount: np.float64
     currency: str
 
     @staticmethod
     def from_schwab_json(json_dict: dict) -> TaxWithholdingRow:
-        date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
+        date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
         symbol = json_dict["Symbol"]
         amount = pd.to_numeric(json_dict["Amount"].strip("-$").replace(",", ""))
 
@@ -245,12 +257,14 @@ class TaxWithholdingRow(DataFrameRow):
 
     @staticmethod
     def default_dict() -> dict:
-        return TaxWithholdingRow(datetime(1, 1, 1), "", np.float64(0), "").to_dict()
+        return TaxWithholdingRow(
+            datetime.date(1, 1, 1), "", np.float64(0), ""
+        ).to_dict()
 
 
 @dataclass
 class SellOrderRow(DataFrameRow):
-    date: datetime
+    date: datetime.date
     symbol: str
     quantity: np.float64
     sell_price: np.float64
@@ -260,7 +274,7 @@ class SellOrderRow(DataFrameRow):
 
     @staticmethod
     def from_schwab_json(json_dict: dict) -> SellOrderRow:
-        date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
+        date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
         symbol = json_dict["Symbol"]
         fees = pd.to_numeric(
             json_dict["FeesAndCommissions"].strip("-$").replace(",", "")
@@ -296,7 +310,13 @@ class SellOrderRow(DataFrameRow):
     @staticmethod
     def default_dict() -> dict:
         return SellOrderRow(
-            datetime(1, 1, 1), "", np.float64(0), np.float64(0), np.float64(0), "", ""
+            datetime.date(1, 1, 1),
+            "",
+            np.float64(0),
+            np.float64(0),
+            np.float64(0),
+            "",
+            "",
         ).to_dict()
 
     @staticmethod
@@ -314,7 +334,7 @@ class SellOrderRow(DataFrameRow):
 
 @dataclass
 class BuyOrderRow(DataFrameRow):
-    date: datetime
+    date: datetime.date
     symbol: str
     quantity: np.float64
     buy_price: np.float64
@@ -325,7 +345,13 @@ class BuyOrderRow(DataFrameRow):
     @staticmethod
     def default_dict() -> dict:
         return BuyOrderRow(
-            datetime(1, 1, 1), "", np.float64(0), np.float64(0), np.float64(0), "", ""
+            datetime.date(1, 1, 1),
+            "",
+            np.float64(0),
+            np.float64(0),
+            np.float64(0),
+            "",
+            "",
         ).to_dict()
 
     @staticmethod
@@ -343,7 +369,7 @@ class BuyOrderRow(DataFrameRow):
 
 @dataclass
 class CurrencyConversionRow(DataFrameRow):
-    date: datetime
+    date: datetime.date
     foreign_amount: np.float64
     source_fees: np.float64
     source_currency: str
@@ -352,7 +378,7 @@ class CurrencyConversionRow(DataFrameRow):
 
     @staticmethod
     def from_schwab_json(json_dict: dict) -> CurrencyConversionRow:
-        date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
+        date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
         fees = pd.to_numeric(
             json_dict["FeesAndCommissions"].strip("-$").replace(",", "")
         )
@@ -369,7 +395,7 @@ class CurrencyConversionRow(DataFrameRow):
     @staticmethod
     def default_dict() -> dict:
         return CurrencyConversionRow(
-            datetime(1, 1, 1), np.float64(0), np.float64(0), "", "", ""
+            datetime.date(1, 1, 1), np.float64(0), np.float64(0), "", "", ""
         ).to_dict()
 
     @staticmethod
@@ -386,8 +412,8 @@ class CurrencyConversionRow(DataFrameRow):
 
 @dataclass
 class MoneyTransferRow(DataFrameRow):
-    date: datetime
-    buy_date: datetime
+    date: datetime.date
+    buy_date: datetime.date
     amount: np.float64
     fees: np.float64
     currency: str
@@ -396,14 +422,19 @@ class MoneyTransferRow(DataFrameRow):
     @staticmethod
     def default_dict() -> dict:
         return MoneyTransferRow(
-            datetime(1, 1, 1), datetime(1, 1, 1), np.float64(0), np.float64(0), "", ""
+            datetime.date(1, 1, 1),
+            datetime.date(1, 1, 1),
+            np.float64(0),
+            np.float64(0),
+            "",
+            "",
         ).to_dict()
 
     @staticmethod
     def from_df_row(row: Series) -> MoneyTransferRow:
         # dummy datetime for EUR transfers and withdrawals
         buy_date = (
-            datetime(1, 1, 1)
+            datetime.date(1, 1, 1)
             if row.currency == "EUR" or row.amount < 0
             else row.buy_date
         )
@@ -418,7 +449,7 @@ class MoneyTransferRow(DataFrameRow):
 
     @staticmethod
     def from_schwab_json(json_dict: dict) -> MoneyTransferRow:
-        date = datetime.strptime(json_dict["Date"], "%m/%d/%Y")
+        date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
         fees = pd.to_numeric(
             json_dict["FeesAndCommissions"].strip("-$").replace(",", "")
         )
@@ -435,7 +466,7 @@ class MoneyTransferRow(DataFrameRow):
 
 @dataclass
 class StockSplitRow(DataFrameRow):
-    date: datetime
+    date: datetime.date
     symbol: str
     shares_after_split: np.float64
 
@@ -449,4 +480,4 @@ class StockSplitRow(DataFrameRow):
 
     @staticmethod
     def default_dict() -> dict:
-        return StockSplitRow(datetime(1, 1, 1), "", np.float64(0.0)).to_dict()
+        return StockSplitRow(datetime.date(1, 1, 1), "", np.float64(0.0)).to_dict()
