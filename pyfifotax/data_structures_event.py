@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import decimal
-from datetime import datetime
+import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
@@ -37,7 +37,7 @@ class EventPriority(Enum):
 
 
 class ReportEvent:
-    def __init__(self, date: datetime, priority: EventPriority):
+    def __init__(self, date: datetime.date, priority: EventPriority):
         self.date = date
         self.priority = priority.value
 
@@ -53,13 +53,13 @@ class ReportEvent:
         return events
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__} on {self.date.date()}"
+        return f"{self.__class__.__name__} on {self.date}"
 
 
 class RSUEvent(ReportEvent):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         symbol: str,
         received_shares: FIFOShare,
         withheld_shares: Optional[FIFOShare],
@@ -99,7 +99,7 @@ class RSUEvent(ReportEvent):
 class DividendEvent(ReportEvent):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         currency: str,
         received_dividend: Forex,
         received_net_dividend: FIFOForex,
@@ -148,7 +148,7 @@ class DividendEvent(ReportEvent):
 class ESPPEvent(ReportEvent):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         symbol: str,
         currency: str,
         received_shares: FIFOShare,
@@ -195,7 +195,7 @@ class ESPPEvent(ReportEvent):
 class BuyEvent(ReportEvent):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         symbol: str,
         received_shares: FIFOShare,
         cost_of_shares: decimal.Decimal,
@@ -256,7 +256,7 @@ class BuyEvent(ReportEvent):
 class SellEvent(ReportEvent):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         symbol: str,
         currency: str,
         quantity: decimal.Decimal,
@@ -316,7 +316,7 @@ class SellEvent(ReportEvent):
 class CurrencyConversionEvent(ReportEvent):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         foreign_amount: decimal.Decimal,
         source_fees: Optional[Forex],
         source_currency: str,
@@ -370,7 +370,7 @@ class CurrencyConversionEvent(ReportEvent):
 class CurrencyConversionEventFromEURToForex(CurrencyConversionEvent):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         foreign_amount: decimal.Decimal,
         source_fees: Optional[Forex],
         target_currency: str,
@@ -388,7 +388,7 @@ class CurrencyConversionEventFromEURToForex(CurrencyConversionEvent):
 class CurrencyConversionEventFromForexToEUR(CurrencyConversionEvent):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         foreign_amount: decimal.Decimal,
         source_fees: Optional[Forex],
         source_currency: str,
@@ -406,8 +406,8 @@ class CurrencyConversionEventFromForexToEUR(CurrencyConversionEvent):
 class MoneyTransferEvent(ReportEvent):
     def __init__(
         self,
-        date: datetime,
-        buy_date: datetime,
+        date: datetime.date,
+        buy_date: datetime.date,
         amount: decimal.Decimal,
         fees: Optional[Forex],
         currency: str,
@@ -442,8 +442,8 @@ class MoneyTransferEvent(ReportEvent):
 class MoneyDepositEvent(MoneyTransferEvent):
     def __init__(
         self,
-        date: datetime,
-        buy_date: datetime,
+        date: datetime.date,
+        buy_date: datetime.date,
         amount: decimal.Decimal,
         fees: Optional[Forex],
         currency: str,
@@ -456,8 +456,8 @@ class MoneyDepositEvent(MoneyTransferEvent):
 class MoneyWithdrawalEvent(MoneyTransferEvent):
     def __init__(
         self,
-        date: datetime,
-        buy_date: datetime,
+        date: datetime.date,
+        buy_date: datetime.date,
         amount: decimal.Decimal,
         fees: Optional[Forex],
         currency: str,
@@ -470,7 +470,7 @@ class MoneyWithdrawalEvent(MoneyTransferEvent):
 class StockSplitEvent(ReportEvent):
     def __init__(
         self,
-        date: datetime,
+        date: datetime.date,
         symbol: str,
         shares_after_split: Decimal,
     ):

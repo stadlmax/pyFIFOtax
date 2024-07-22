@@ -5,7 +5,7 @@ import os
 import pandas as pd
 from babel.numbers import parse_decimal
 
-from datetime import date
+import datetime
 
 
 parser = argparse.ArgumentParser(
@@ -203,7 +203,7 @@ class IbkrConverter(Converter):
         quantity = self._parse_number(self.row[8])
         df = self.df_deposits if quantity > 0 else self.df_sales
         df.loc[len(df.index)] = [
-            date.fromisoformat(self.row[6].split(",")[0]),  # Date
+            datetime.date.fromisoformat(self.row[6].split(",")[0]),  # Date
             self.row[5],  # Symbol
             abs(quantity),  # Quantity
             self._parse_number(self.row[9]),  # T. Price
@@ -257,7 +257,7 @@ class IbkrConverter(Converter):
             return False
 
         self.df_forex_to_eur.loc[len(self.df_forex_to_eur.index)] = [
-            date.fromisoformat(self.row[6].split(",")[0]),  # Date
+            datetime.date.fromisoformat(self.row[6].split(",")[0]),  # Date
             abs(self._parse_number(self.row[11])),  # Proceeds
             abs(
                 self._parse_number(self.row[12]) * self._parse_number(self.row[9])
@@ -312,7 +312,7 @@ class IbkrConverter(Converter):
 
         symbol = self.row[4].split(" ")[0]
         self.df_dividends.loc[len(self.df_dividends.index)] = [
-            date.fromisoformat(self.row[3]),  # Date
+            datetime.date.fromisoformat(self.row[3]),  # Date
             symbol,
             self._parse_number(self.row[5]),  # Amount
             0,  # Tax withholding
