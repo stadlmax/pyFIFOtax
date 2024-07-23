@@ -140,8 +140,15 @@ class CSVConverter:
         worksheet.autofit()  # Adjust column widths to their maximum lengths
 
     @staticmethod
-    def _parse_number(string):
+    def _parse_number(string: str):
         return float(parse_decimal(string, locale="en_US", strict=True))
+
+    @staticmethod
+    def _wrong_header(header: str):
+        raise ValueError(
+            "Input CSV is not in the expected format. Either this script needs adaptation or "
+            f"a wrong type of CSV was downloaded. {header.title()} header is incorrect"
+        )
 
     def _process_trades(self):
         raise NotImplementedError()
@@ -194,10 +201,7 @@ class IbkrConverter(CSVConverter):
             ]
 
             if self.row != expected_headers:
-                raise ValueError(
-                    "IBKR CSV is not in the expected format. Either this script needs adaption or "
-                    "a wrong type of CSV was downloaded. Trade header is incorrect"
-                )
+                self._wrong_header("trade")
 
             return True
 
@@ -249,10 +253,7 @@ class IbkrConverter(CSVConverter):
             ]
 
             if self.row != expected_headers:
-                raise ValueError(
-                    "IBKR CSV is not in the expected format. Either this script needs adaption or "
-                    "a wrong type of CSV was downloaded. Forex header is incorrect"
-                )
+                self._wrong_header("forex")
 
             return True
 
@@ -309,10 +310,7 @@ class IbkrConverter(CSVConverter):
 
             expected_headers += ["Code"]
             if not self.row == expected_headers:
-                raise ValueError(
-                    "IBKR CSV is not in the expected format. Either this script needs adaption or "
-                    "a wrong type of CSV was downloaded. Dividends header is incorrect"
-                )
+                self._wrong_header("Dividends")
 
             self.skip_dividend_section = False
             return True
@@ -366,11 +364,8 @@ class IbkrConverter(CSVConverter):
             expected_headers[1].insert(-1, "Type")
 
             if self.row not in expected_headers:
-                raise ValueError(
-                    "IBKR CSV is not in the expected format. Either this script needs adaption or "
-                    "a wrong type of CSV was downloaded. Financial instrument information header "
-                    "is incorrect"
-                )
+                self._wrong_header("Financial Instrument Information")
+
             return True
 
         return False
