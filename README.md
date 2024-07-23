@@ -109,10 +109,7 @@ Always thoroughly examine the result.
 
 By default, the "symbol" column contains the ticker name. If you'd like to see the ISIN there instead, use the `--ticker-to-isin` flag.
 
-Note the following limitations:
-
-* IBKR export format is very extensive, it's possible that some rows are not processed. Always verify the results
-* Tax withholding calculation is not supported for dividends. Withheld tax will always be zero.
+Note that IBKR export format is very extensive, it's possible that some rows are not processed. Always verify the results.
 
 ## Schwab
 
