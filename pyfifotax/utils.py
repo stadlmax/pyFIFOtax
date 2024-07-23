@@ -81,17 +81,33 @@ def get_reference_rates():
     supported_currencies = set(daily_ex_rates.columns)
     supported_currencies.add("EUR")
 
+    daily_ex_rates = {
+        cur: {
+            date.date(): daily_ex_rates[cur][date] for date in daily_ex_rates[cur].index
+        }
+        for cur in supported_currencies
+        if cur != "EUR"
+    }
+    monthly_ex_rates = {
+        cur: {
+            (year, month): monthly_ex_rates[cur][(year, month)]
+            for year, month in monthly_ex_rates[cur].index
+        }
+        for cur in supported_currencies
+        if cur != "EUR"
+    }
+
     return daily_ex_rates, monthly_ex_rates, supported_currencies
 
 
-def get_monthly_rate(monthly_rates: pd.DataFrame, date: datetime.date, currency: str):
+def get_monthly_rate(monthly_rates: dict, date: datetime.date, currency: str):
     if currency == "EUR":
         return to_decimal(1)
 
     return to_decimal(monthly_rates[currency][date.year, date.month].item())
 
 
-def get_daily_rate(daily_rates: pd.DataFrame, date: datetime.date, currency: str):
+def get_daily_rate(daily_rates: dict, date: datetime.date, currency: str):
     if currency == "EUR":
         return to_decimal(1)
 
@@ -118,7 +134,7 @@ class RawData:
     buy_orders: pd.DataFrame
     sell_orders: pd.DataFrame
     currency_conversions: pd.DataFrame
-    money_transfers: pd.DataFrame
+    money_transfers: Optional[pd.DataFrame]
     stock_splits: Optional[pd.DataFrame]
 
 
@@ -397,7 +413,6 @@ def add_total_amount_row(df):
     new_row = pd.DataFrame([new_row])
     total_dfs.append(new_row)
 
-    new_row = {c: None for c in cols}
     new_row = {c: "Total Amount" if c == "Symbol" else None for c in cols}
     new_row["Amount [EUR]"] = amount
     new_row = pd.DataFrame([new_row])

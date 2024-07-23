@@ -104,6 +104,7 @@ class ReportData:
         # traversing the list from earliest date to latest then allows
         # for gradually building FIFO-Queues
         self.report_events: list[ReportEvent] = []
+        self.report_years: set[int] = set()
 
         # read in currency information
         (
@@ -288,7 +289,6 @@ class ReportData:
                 # dividends should be small enough to not trigger AWV reportings
 
             elif isinstance(event, BuyEvent):
-                print(self.held_forex[event.currency])
                 # if not enough money, pop on FOREX Queue will fail
                 tmp = self.held_forex[event.currency].pop(
                     event.cost_of_shares,
@@ -391,8 +391,7 @@ class ReportData:
                     self.held_shares[event.symbol].apply_split(event.shares_after_split)
 
             else:
-                print(event)
-                raise RuntimeError("Unexpected Code Path reached.")
+                raise RuntimeError(f"Unexpected Code Path reached, Event {event}.")
 
     def apply_exchange_rates(self):
         apply_rates_forex_dict(self.misc, self.daily_rates, self.monthly_rates)
@@ -522,7 +521,7 @@ class ReportData:
         ) as writer:
             create_report_sheet("withdrawals", df, writer)
 
-    def create_all_reports(self, s, awv_threshold_eur=12_500):
+    def create_all_reports(self, awv_threshold_eur=12_500):
         report_years = self.report_years
         self.create_withdrawal_report()
         for year in report_years:

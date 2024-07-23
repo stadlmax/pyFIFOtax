@@ -84,7 +84,7 @@ class ESPPRow(DataFrameRow):
     @staticmethod
     def from_df_row(row: Series) -> ESPPRow:
         return ESPPRow(
-            row.date,
+            row.date.date(),
             row.symbol,
             row.buy_price,
             row.fair_market_value,
@@ -183,7 +183,7 @@ class RSURow(DataFrameRow):
     @staticmethod
     def from_df_row(row: Series) -> RSURow:
         return RSURow(
-            row.date,
+            row.date.date(),
             row.symbol,
             row.gross_quantity,
             row.net_quantity,
@@ -226,7 +226,7 @@ class DividendRow(DataFrameRow):
     @staticmethod
     def from_df_row(row: Series) -> DividendRow:
         return DividendRow(
-            row.date,
+            row.date.date(),
             row.symbol,
             row.amount,
             row.tax_withholding,
@@ -322,7 +322,7 @@ class SellOrderRow(DataFrameRow):
     @staticmethod
     def from_df_row(row: Series) -> SellOrderRow:
         return SellOrderRow(
-            row.date,
+            row.date.date(),
             row.symbol,
             row.quantity,
             row.sell_price,
@@ -357,7 +357,7 @@ class BuyOrderRow(DataFrameRow):
     @staticmethod
     def from_df_row(row: Series) -> BuyOrderRow:
         return BuyOrderRow(
-            row.date,
+            row.date.date(),
             row.symbol,
             row.quantity,
             row.buy_price,
@@ -401,7 +401,7 @@ class CurrencyConversionRow(DataFrameRow):
     @staticmethod
     def from_df_row(row: Series) -> CurrencyConversionRow:
         return CurrencyConversionRow(
-            row.date,
+            row.date.date(),
             row.foreign_amount,
             row.source_fees,
             row.source_currency,
@@ -436,10 +436,10 @@ class MoneyTransferRow(DataFrameRow):
         buy_date = (
             datetime.date(1, 1, 1)
             if row.currency == "EUR" or row.amount < 0
-            else row.buy_date
+            else row.buy_date.date()
         )
         return MoneyTransferRow(
-            row.date,
+            row.date.date(),
             buy_date,
             row.amount,
             row.fees,
@@ -473,7 +473,7 @@ class StockSplitRow(DataFrameRow):
     @staticmethod
     def from_df_row(row: Series) -> StockSplitRow:
         return StockSplitRow(
-            date=row.date,
+            date=row.date.date(),
             symbol=row.symbol,
             shares_after_split=row.shares_after_split,
         )

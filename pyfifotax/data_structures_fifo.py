@@ -54,7 +54,7 @@ class FIFOObject:
         return self.quantity * self.buy_price
 
     def total_sell_value(self):
-        return self.quantity * self.sell_sprice
+        return self.quantity * self.sell_price
 
 
 # class representing a FOREX object subject to FIFO treatment
