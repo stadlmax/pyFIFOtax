@@ -1,4 +1,5 @@
 import re
+import sys
 from datetime import date
 
 from .csv_converter import CSVConverter
@@ -101,21 +102,35 @@ class IbkrConverter(CSVConverter):
         return self._check_header(condition, expected_headers, "forex")
 
     def _process_forex_row(self):
-        if self.row[2] != "Order":
+        if self.row[2] != "Trade":
             return False
 
+        day = date.fromisoformat(self.row[6].split(",")[0])
+        base_currency, quote_currency = self.row[5].split(".")
+        quantity = self._parse_number(self.row[8])
+        proceeds = self._parse_number(self.row[11])
+        comm_in_eur = abs(self._parse_number(self.row[12]))
+
+        if quantity > 0:
+            source_currency = quote_currency
+            target_currency = base_currency
+            source_amount = -proceeds
+            target_amount = quantity
+        else:
+            source_currency = base_currency
+            target_currency = quote_currency
+            source_amount = -quantity  # Whichever of quantity or proceeds is < 0, that's the source
+            target_amount = proceeds
+
         self.df_forex.loc[len(self.df_forex.index)] = [
-            date.fromisoformat(self.row[6].split(",")[0]),  # Date
-            abs(self._parse_number(self.row[11])),  # Proceeds
-            self.row[4],  # Currency
-            -1,
-            self.row[4],  # Currency
-            abs(
-                self._parse_number(self.row[12]) * self._parse_number(self.row[9])
-            ),  # Comm in EUR * T. Price
-            self.row[5].replace(self.row[4], "").replace(".", ""),  # Symbol - Source currency
-            self.row[4],  # Currency - Target currency
-            "[on IBKR]",  # Comment
+            day,
+            source_amount,
+            source_currency,
+            target_amount,
+            target_currency,
+            comm_in_eur,
+            "EUR",
+            "[on IBKR]",
         ]
 
         return True
