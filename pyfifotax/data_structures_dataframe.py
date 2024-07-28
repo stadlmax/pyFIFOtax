@@ -68,15 +68,14 @@ class ESPPRow(DataFrameRow):
         )
         if is_historic:
             split_msg = ""
-
         else:
-            # TODO: look into supporting arbitary splits
+            # TODO: look into supporting arbitrary splits
             # assumptions for now: if adjusted: price < hist_price and integer
             split_factor = round(hist_price / buy_price)
             buy_price = buy_price * split_factor
             fair_market_value = fair_market_value * split_factor
             quantity = quantity / split_factor
-            split_msg = f": adjusted values for stock splits with an assumed split-factor of {split_factor}"
+            split_msg = f"Adjusted values for stock splits with an assumed split-factor of {split_factor} "
 
         return ESPPRow(
             date,
@@ -85,7 +84,7 @@ class ESPPRow(DataFrameRow):
             fair_market_value,
             quantity,
             "USD",
-            "Automated Schwab Import (JSON)" + split_msg,
+            f"{split_msg}[on Schwab]",
         )
 
     @staticmethod
@@ -148,14 +147,13 @@ class RSURow(DataFrameRow):
         )
         if is_historic:
             split_msg = ""
-
         else:
-            # TODO: look into supporting arbitary splits
+            # TODO: look into supporting arbitrary splits
             split_factor = round(hist_price / fair_market_value)
             fair_market_value = fair_market_value * split_factor
             net_quantity = net_quantity / split_factor
             gross_quantity = gross_quantity / split_factor
-            split_msg = f": adjusted values for stock splits with an assumed split-factor of {split_factor}"
+            split_msg = f". Adjusted values for stock splits with an assumed split-factor of {split_factor}"
 
         return (
             RSURow(
@@ -165,7 +163,7 @@ class RSURow(DataFrameRow):
                 net_quantity,
                 fair_market_value,
                 "USD",
-                f"Automated Schwab Import (JSON, Award ID {award_id})" + split_msg,
+                f"Award ID: {award_id}{split_msg} [on Schwab]",
             ),
             award_id,
         )
@@ -195,13 +193,12 @@ class RSURow(DataFrameRow):
         )
         if is_historic:
             split_msg = ""
-
         else:
-            # TODO: look into supporting arbitary splits
+            # TODO: look into supporting arbitrary splits
             split_factor = round(hist_price / fair_market_value)
             fair_market_value = fair_market_value * split_factor
             net_quantity = net_quantity / split_factor
-            split_msg = f": adjusted values for stock splits with an assumed split-factor of {split_factor}"
+            split_msg = f". Adjusted values for stock splits with an assumed split-factor of {split_factor}"
 
         return (
             RSURow(
@@ -211,7 +208,7 @@ class RSURow(DataFrameRow):
                 net_quantity,
                 fair_market_value,
                 "USD",
-                f"Automated Schwab Import (JSON, Award ID {award_id})" + split_msg,
+                f"Award ID: {award_id}{split_msg} [on Schwab]",
             ),
             award_id,
         )
@@ -262,7 +259,7 @@ class DividendRow(DataFrameRow):
             amount,
             np.float64(0),
             "USD",
-            "Automated Schwab Import (JSON)",
+            "[on Schwab]",
         )
 
     @staticmethod
@@ -397,7 +394,7 @@ class SellOrderRow(DataFrameRow):
             "USD",
             fees,
             "USD",
-            "Automated Schwab Import (JSON)",
+            "[on Schwab]",
         )
 
     @staticmethod
@@ -494,7 +491,7 @@ class CurrencyConversionRow(DataFrameRow):
             "EUR",
             fees,
             "USD",
-            "Automated Schwab Import (JSON, Currency Conversion from Wire Transfer, check correctness!)",
+            "Currency conversion from wire transfer, check correctness! [on Schwab]",
         )
 
     @staticmethod
@@ -580,7 +577,7 @@ class MoneyTransferRow(DataFrameRow):
             "USD",
             fees,
             "USD",
-            "Automated Schwab Import (JSON, Wire Transfer)",
+            "Wire transfer [on Schwab]",
         )
 
 
