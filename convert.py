@@ -40,7 +40,8 @@ parser.add_argument(
     help="Replace tickers in the 'symbol' column to ISIN (only for IBKR)",
 )
 parser.add_argument(
-    "--forex_transfer_as_exchange",
+    "--forex-transfer-as-exchange",
+    dest="forex_transfer_as_exchange",
     action="store_true",
     help=(
         "If set, treats outgoing wire transfers as currency exchange to EUR."
