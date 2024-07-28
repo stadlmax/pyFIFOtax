@@ -161,7 +161,10 @@ class FIFOQueue:
                     f"Cannot sell more {symbol} shares ({quantity:.2f}) than owned overall ({self.total_quantity:.2f})."
                 )
             elif asset_type == "FIFOForex":
-                if quantity < self.total_quantity + to_decimal(0.1):
+                # with FOREX, there might be some rounding errors, to avoid
+                # erroring out for rather small differences, we'll allow for
+                # rounding errors below 1 currency unit
+                if quantity < self.total_quantity + to_decimal(1.0):
                     msg = f"Trying to convert {quantity:.2f} {symbol}"
                     msg += f"despite only owning {self.total_quantity} {symbol}."
                     msg += "Assuming that this minor difference comes from rounding errors, proceeding with rounding down."

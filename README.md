@@ -30,6 +30,9 @@ The reporting tool will create FIFO queues of Foreign Currencies (i.e. not EUR) 
 - for deposits, indicate a positive amount as inflow to your account and the date of deposit under `date`; since FOREX follows a FIFO taxationn principle, too, you also have to know the initial `buy_date` (or acquisition date) of the foreign currency such that later sell transactions can be correctly valued
 - for deposits in EUR, `buy_date` isn't relevant and you can treat it similarly to withdrawals of any other currency (e.g. just setting it to the same value as the transaction)
 
+# Known Limitations
+Same day events are currently ordered based on certain priorities to cover typical transaction patterns. However, this usually leads to sell orders being processed before buy orders, i.e. buying and immediately selling shares without owning any others before will error out. 
+
 
 # Report Generation
 `create_report.py` will generate the report for you. Usage:
