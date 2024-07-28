@@ -71,7 +71,7 @@ Always inspect the results manually and copy only those values into the final sp
 Parameters:
 
 ```
-convert.py [-h] -i INPUT_FILENAME -o XLSX_FILENAME [--degiro-account-csv DEGIRO_ACCOUNT_CSV] [--ticker-to-isin | --no-ticker-to-isin] [--forex_transfer_as_exchange]
+convert.py [-h] -i INPUT_FILENAME -o XLSX_FILENAME [--degiro-account-csv DEGIRO_ACCOUNT_CSV] [--ticker-to-isin | --no-ticker-to-isin] [--forex-transfer-as-exchange]
                   {degiro,ibkr,schwab}
 
 Convert DEGIRO and Interactive Brokers CSV and Schwab JSON output to XLSX for later processing
@@ -89,7 +89,7 @@ options:
                         Account.csv input file (only required for DEGIRO)
   --ticker-to-isin, --no-ticker-to-isin
                         Replace tickers in the 'symbol' column to ISIN (only for IBKR)
-  --forex_transfer_as_exchange
+  --forex-transfer-as-exchange
                         If set, treats outgoing wire transfers as currency exchange to EUR. This can be helpful to simplify the reporting of currency conversions if this is the only style
                         of transfer. Please check the actual date of conversion and for correctness in general! (Only for Schwab)
 ```
