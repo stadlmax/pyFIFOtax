@@ -222,7 +222,7 @@ class IbkrConverter(CSVConverter):
         return False
 
     def _process_dividend_row(self):
-        if self._skip_dividend_section or self.row[2] == "Total":
+        if self._skip_dividend_section or self.row[2].startswith("Total"):
             return False
 
         symbol = self.row[4].split(" ")[0]
