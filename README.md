@@ -26,9 +26,10 @@ Shares coming from ESPPs or RSU lapses can be treated differently. With ESPP oft
 
 # Currencies, FOREX, and Deposits
 The reporting tool will create FIFO queues of Foreign Currencies (i.e. not EUR) and a balance of EUR. These are also used e.g. for stock transactions and implicit currency events. To ensure that e.g. buy transactions are properly tracked based on initial balances and that currency related events are properly tracked after withdrawals, the tool can work on a provided list of money transfers in EUR or a foreign currency.
-- for deposits, indicate the initial buy date of the foreign currency
-- for withdrawals, set the amount as negative value indicating the outflow of money
-- buy_date only has to be set for deposits of foreign currency, not for transfers of EUR and not for withdrawals in general
+- for withdrawals, set the amount as negative value indicating the outflow of money and indicate the date of withdrawal under `date` while being able to ignore the column `buy_date` (e.g. by setting it to a dummy date or to the same value as `date`)
+- for deposits, indicate a positive amount as inflow to your account and the date of deposit under `date`; since FOREX follows a FIFO taxationn principle, too, you also have to know the initial `buy_date` (or acquisition date) of the foreign currency such that later sell transactions can be correctly valued
+- for deposits in EUR, `buy_date` isn't relevant and you can treat it similarly to withdrawals of any other currency (e.g. just setting it to the same value as the transaction)
+
 
 # Report Generation
 `create_report.py` will generate the report for you. Usage:

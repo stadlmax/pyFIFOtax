@@ -49,7 +49,7 @@ parser.add_argument(
 def main(sub_dir, file_name, report_year, rate_mode, create_all_reports):
     report = ReportData(sub_dir=sub_dir, file_name=file_name)
     if create_all_reports:
-        report.create_all_reports(sub_dir)
+        report.create_all_reports()
 
     else:
         report.create_excel_report(

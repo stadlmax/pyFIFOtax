@@ -1,6 +1,7 @@
 import math
 import decimal
 import datetime
+import warnings
 from decimal import Decimal
 
 from pyfifotax.utils import to_decimal
@@ -160,6 +161,12 @@ class FIFOQueue:
                     f"Cannot sell more {symbol} shares ({quantity:.2f}) than owned overall ({self.total_quantity:.2f})."
                 )
             elif asset_type == "FIFOForex":
+                if quantity < self.total_quantity + to_decimal(0.1):
+                    msg = f"Trying to convert {quantity:.2f} {symbol}"
+                    msg += f"despite only owning {self.total_quantity} {symbol}."
+                    msg += "Assuming that this minor difference comes from rounding errors, proceeding with rounding down."
+                    warnings.warn(msg)
+                    return self.pop(self.total_quantity, sell_price, sell_date)
                 raise ValueError(
                     f"Cannot convert more {symbol} ({quantity:.2f}) than owned overall ({self.total_quantity:.2f})."
                 )
