@@ -36,6 +36,7 @@ from pyfifotax.utils import (
     write_report,
     write_report_awv,
     create_report_sheet,
+    RawData,
 )
 from pyfifotax.utils import to_decimal
 
@@ -232,6 +233,26 @@ class ReportData:
                 if not isinstance(e, StockSplitEvent)
             ]
         )
+
+        self.check_same_day_buy_sell(raw_data)
+
+    @staticmethod
+    def check_same_day_buy_sell(raw_data: RawData):
+        all_buys = [df.rename(columns={"quantity": "buy_quantity", "net_quantity": "buy_quantity"})
+                    for df in [raw_data.espp, raw_data.rsu, raw_data.buy_orders] if df is not None and not df.empty]
+        if not all_buys:
+            return
+
+        all_buys = pd.concat(all_buys, ignore_index=True)
+        same_dayers = pd.merge(left=all_buys, right=raw_data.sell_orders, on=['date', 'symbol'])
+
+        if not same_dayers.empty:
+            msg = ("Buy and sell of a stock happened on the same day which is not supported.\n"
+                   "It's advised to correct or remove them. Affected transactions:\n\n")
+            for _, row in same_dayers.iterrows():
+                msg += f"• {row['date'].date()}: +{row['buy_quantity']:g}/−{row['quantity']:g} {row['symbol']}\n"
+
+            logger.warning(msg)
 
     def process_report_events(self):
         for event in self.report_events:
