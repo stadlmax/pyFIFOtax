@@ -279,6 +279,8 @@ class SellOrderRow(DataFrameRow):
         fees = pd.to_numeric(
             json_dict["FeesAndCommissions"].strip("-$").replace(",", "")
         )
+        if np.isnan(fees):
+            fees = pd.to_numeric("0.0")
         quantity = pd.to_numeric(json_dict["Quantity"])
         details = json_dict["TransactionDetails"]
 
@@ -382,6 +384,8 @@ class CurrencyConversionRow(DataFrameRow):
         fees = pd.to_numeric(
             json_dict["FeesAndCommissions"].strip("-$").replace(",", "")
         )
+        if np.isnan(fees):
+            fees = pd.to_numeric("0.0")
         foreign_amount = pd.to_numeric(json_dict["Amount"].strip("-$").replace(",", ""))
         return CurrencyConversionRow(
             date,
@@ -453,6 +457,8 @@ class MoneyTransferRow(DataFrameRow):
         fees = pd.to_numeric(
             json_dict["FeesAndCommissions"].strip("-$").replace(",", "")
         )
+        if np.isnan(fees):
+            fees = pd.to_numeric("0.0")
         foreign_amount = pd.to_numeric(json_dict["Amount"].strip("-$").replace(",", ""))
         return MoneyTransferRow(
             date,
