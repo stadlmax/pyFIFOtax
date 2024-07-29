@@ -26,9 +26,21 @@ Shares coming from ESPPs or RSU lapses can be treated differently. With ESPP oft
 
 # Currencies, FOREX, and Deposits
 The reporting tool will create FIFO queues of Foreign Currencies (i.e. not EUR) and a balance of EUR. These are also used e.g. for stock transactions and implicit currency events. To ensure that e.g. buy transactions are properly tracked based on initial balances and that currency related events are properly tracked after withdrawals, the tool can work on a provided list of money transfers in EUR or a foreign currency.
+
+## Money Transfers
+The tab for money transfers allows to track withdrawls (negative deposits) and deposits
 - for withdrawals, set the amount as negative value indicating the outflow of money and indicate the date of withdrawal under `date` while being able to ignore the column `buy_date` (e.g. by setting it to a dummy date or to the same value as `date`)
 - for deposits, indicate a positive amount as inflow to your account and the date of deposit under `date`; since FOREX follows a FIFO taxationn principle, too, you also have to know the initial `buy_date` (or acquisition date) of the foreign currency such that later sell transactions can be correctly valued
 - for deposits in EUR, `buy_date` isn't relevant and you can treat it similarly to withdrawals of any other currency (e.g. just setting it to the same value as the transaction)
+- note that in general, only the EUR balance can become negative and errors will be thrown if FOREX balances are to become negative
+
+## Currency Conversions
+The tab for currency conversions allows to track conversions between different currencies.
+- converting from EUR to FOREX: indicate the date of the conversion, EUR as source currency, the foreign currency as target currency, and the amount of foreign currency you obtain after the conversion
+- converting from FOREX to EUR: indicate the date of the conversion, EUR as target currency, the foreign currency as source currency, and the amount of foreign currency you want to convert before the conversion and fees
+- conversions between two FOREX: separate this conversion into separate conversions, one from X->EUR and one from EUR->Y applying the principles mentioned above
+
+Note that there always be a differene between the actual exchange rate you got and the exchange rate relevant for taxation (based on ECB rates). By only making use of the "foreign amount", these discrepancies should be moved into the EUR balance. The scripts will only use the tax-relevant rates which then sometimes can lead to slight differences in the EUR balance. As these scripts are mainly meant to be helpful for tax reporting and not to monitor your wealth, this design decision simplifies a few things at the minor cost of incorrect EUR balances.
 
 # Known Limitations
 Same day events are currently ordered based on certain priorities to cover typical transaction patterns. However, this usually leads to sell orders being processed before buy orders, i.e. buying and immediately selling shares without owning any others before will error out. 
