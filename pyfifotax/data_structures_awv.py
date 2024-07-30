@@ -22,7 +22,7 @@ class AWVEntry:
     def as_dict(self):
         raise NotImplementedError
 
-    def apply_daily_rate(self, daily_rates: pd.DataFrame):
+    def apply_daily_rate(self, daily_rates: dict):
         if (self.value is None) or (self.date is None) or (self.currency is None):
             raise RuntimeError("calling apply_daily_rate on uninitialized AWVEntry")
         self.value_eur = self.value / get_daily_rate(

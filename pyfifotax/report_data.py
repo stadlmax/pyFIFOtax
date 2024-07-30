@@ -35,6 +35,7 @@ from pyfifotax.utils import (
     write_report,
     write_report_awv,
     create_report_sheet,
+    get_daily_rate,
 )
 from pyfifotax.utils import to_decimal
 
@@ -364,7 +365,6 @@ class ReportData:
                 self.withdrawn_forex[event.currency].extend(tmp)
 
             elif isinstance(event, CurrencyConversionEventFromEURToForex):
-                # "buy" forex (note: EUR used up not tracked)
                 new_forex = FIFOForex(
                     currency=event.target_currency,
                     quantity=event.foreign_amount,
@@ -372,16 +372,29 @@ class ReportData:
                     source=f"Currency Conversion EUR to {event.target_currency}",
                 )
                 self.held_forex[event.target_currency].push(new_forex)
+                sold_eur = event.foreign_amount / get_daily_rate(
+                    self.daily_rates, event.date, event.target_currency
+                )
+                self.held_forex["EUR"].pop(sold_eur, to_decimal(1), event.date)
                 if event.source_fees is not None:
                     self.misc["Fees"].append(event.source_fees)
 
             elif isinstance(event, CurrencyConversionEventFromForexToEUR):
-                # "sell" forex (note: EUR received not tracked)
                 tmp = self.held_forex[event.source_currency].pop(
                     event.foreign_amount,
                     to_decimal(1),
                     event.date,
                 )
+                recv_eur = event.foreign_amount / get_daily_rate(
+                    self.daily_rates, event.date, event.source_currency
+                )
+                recv_eur_forex = FIFOForex(
+                    currency="EUR",
+                    quantity=recv_eur,
+                    buy_date=event.date,
+                    source=f"Currency Conversion {event.source_currency} to EUR",
+                )
+                self.held_forex["EUR"].push(recv_eur_forex)
                 self.sold_forex[event.source_currency].extend(tmp)
                 if event.source_fees is not None:
                     self.misc["Fees"].append(event.source_fees)
