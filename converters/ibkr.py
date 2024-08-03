@@ -9,6 +9,7 @@ class IbkrConverter(CSVConverter):
         super().__init__(args, {args.input_filename: "utf-8-sig"})
         self._ticker_to_isin = args.ticker_to_isin
 
+        self._comment = "[on IBKR]"
         self._skip_dividend_section = False
         self._skip_dw_section = False
         self._withholding_tax = {}
@@ -61,7 +62,7 @@ class IbkrConverter(CSVConverter):
             self.row[4],  # Currency
             abs(self._parse_number(self.row[12])),  # Comm/Fee
             self.row[4],  # Fee Currency
-            self.row[5] + " [on IBKR]",  # Symbol, comment
+            f"{self.row[5]} {self._comment}",  # Symbol, comment
         ]
 
         return True
@@ -129,7 +130,7 @@ class IbkrConverter(CSVConverter):
             target_currency,
             comm_in_eur,
             "EUR",
-            "[on IBKR]",
+            self._comment,
         ]
 
         return True
@@ -180,7 +181,7 @@ class IbkrConverter(CSVConverter):
             self.row[2],  # Symbol
             0,  # Fees
             "",
-            f"{self.row[4]} [on IBKR]",  # comment
+            f"{self.row[4]} {self._comment}",  # comment
         ]
 
         return True
@@ -232,7 +233,7 @@ class IbkrConverter(CSVConverter):
             self._parse_number(self.row[5]),  # Amount
             0,  # Tax withholding
             self.row[2],  # Currency
-            symbol + " [on IBKR]",  # Comment
+            f"{symbol} {self._comment}",  # Comment
         ]
 
         return True
@@ -287,12 +288,16 @@ class IbkrConverter(CSVConverter):
             self._parse_number(self.row[5]),  # Amount
             self._withholding_tax[self.row[4]],  # Tax withholding
             self.row[2],  # Currency
-            f"{self.row[2]} interest [on IBKR]",  # Product
+            f"{self.row[2]} interest {self._comment}",  # Product
         ]
 
         return True
 
     def _process_instrument_information(self):
+        if self.row[0] == "Account Information" and self.row[2] == "Account Alias" and self.row[3]:
+            self._comment = f"[on IBKR · {self.row[3]}]"
+            return
+
         if self.row[0] != "Financial Instrument Information":
             return
 
@@ -338,4 +343,4 @@ class IbkrConverter(CSVConverter):
             if self._ticker_to_isin:
                 df.loc[df["symbol"] == symbol, "symbol"] = isin
 
-            df.loc[df["comment"] == symbol + " [on IBKR]", "comment"] = product + " [on IBKR]"
+            df.loc[df["comment"] == f"{symbol} {self._comment}", "comment"] = f"{product} {self._comment}"
