@@ -353,8 +353,14 @@ class ReportData:
                 if event.fees is not None:
                     self.misc["Fees"].append(event.fees)
                 try:
+                    # you withdraw from this account the full amount, but other account only receives
+                    # the value after fees (withdrawal amount doesn't include fees)
+                    withdrawn_amount = event.amount
+                    if event.fees is not None:
+                        withdrawn_amount -= event.fees.amount
+
                     tmp = self.held_forex[event.currency].pop(
-                        event.amount,
+                        withdrawn_amount,
                         to_decimal(1),
                         event.date,
                     )
@@ -362,13 +368,7 @@ class ReportData:
                     raise ValueError(
                         f"Cannot withdraw {event.amount} {event.currency}, not enough owned."
                     )
-                # you withdraw from this account the full amount, but other account only receives
-                # the value after fees (withdrawal amount doesn't include fees)
-                if event.fees is not None:
-                    withdrawn_amount = tmp - event.fees.amount
-                else:
-                    withdrawn_amount = tmp
-                self.withdrawn_forex[event.currency].extend(withdrawn_amount)
+                self.withdrawn_forex[event.currency].extend(tmp)
 
             elif isinstance(event, CurrencyConversionEvent):
                 sold_forex = self.held_forex[event.source_currency].pop(
