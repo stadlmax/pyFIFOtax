@@ -242,7 +242,7 @@ class BuyEvent(ReportEvent):
         # e.g. 100.7438, the deposited value, however,
         # is rounded to full cents
         # TODO: check if rounding mode matches schwab
-        cost_of_shares = round_decimal(buy_price * quantity - fees, precision="0.01")
+        cost_of_shares = round_decimal(buy_price * quantity + fees, precision="0.01")
         return BuyEvent(
             row.date,
             row.symbol,

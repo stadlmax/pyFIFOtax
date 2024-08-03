@@ -362,7 +362,13 @@ class ReportData:
                     raise ValueError(
                         f"Cannot withdraw {event.amount} {event.currency}, not enough owned."
                     )
-                self.withdrawn_forex[event.currency].extend(tmp)
+                # you withdraw from this account the full amount, but other account only receives
+                # the value after fees (withdrawal amount doesn't include fees)
+                if event.fees is not None:
+                    withdrawn_amount = tmp - event.fees.amount
+                else:
+                    withdrawn_amount = tmp
+                self.withdrawn_forex[event.currency].extend(withdrawn_amount)
 
             elif isinstance(event, CurrencyConversionEventFromEURToForex):
                 new_forex = FIFOForex(
