@@ -38,8 +38,9 @@ You can generate a list of withdrawals including the relevant `buy_date` informa
 
 ## Currency Conversions
 The tab for currency conversions allows to track conversions between different currencies by specifying the source and target amount incl. potential fees on both sides. 
-- source fees lower the amount to be exchanges, i.e. the source amount to be specified is the one before fees
-- target fees lower the amount to be received, i.e. the target amount to be specified is the one after fees
+- source fees lower the amount to be exchanged, i.e. the source amount to be specified is the one before fees
+- target fees lower the amount to be received, i.e. the target amount to be specified is also the one before fees
+- i.e. internally, (source_amount - source_fees) is exchanged, and you actually receive (target_amount - target_fees) 
 - if you exchange from EUR to FOREX or from FOREX to EUR, you can leave the corresponding EUR amount as "-1" and indicate that you don't care about the exact exchange rate. The resulting EUR balance then can be slightly incorrect, but as this balance is allowed to become negative, you shouldn't experience any resulting issues from doing so. In terms of taxation, currency exchanges are handled by the official ECB rates anyways, so the exact rate doesn't matter anyways. This mode can be handy if you only want to receive useful inputs for your tax declaration but don't care about an exact EUR balance.
 - when exchanging between two different FOREX, you will have to specify both amount explicitly
 
