@@ -221,9 +221,11 @@ def read_data_legacy(sub_dir, file_name):
             xls, sheet_name=forex_sheet, parse_dates=["date"], dtype=dtypes
         )
         df_currency_conversions["target_currency"] = "EUR"
-        df_currency_conversions["foreign_amount"] = (
+        df_currency_conversions["source_amount"] = (
             df_currency_conversions.net_amount + df_currency_conversions.fees
         )
+        df_currency_conversions["target_fees"] = 0
+        df_currency_conversions["target_amount"] = -1
         df_currency_conversions.rename(
             mapper={"fees": "source_fees", "currency": "source_currency"},
             axis="columns",

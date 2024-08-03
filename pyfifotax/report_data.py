@@ -11,8 +11,6 @@ from pyfifotax.data_structures_event import (
     BuyEvent,
     SellEvent,
     CurrencyConversionEvent,
-    CurrencyConversionEventFromEURToForex,
-    CurrencyConversionEventFromForexToEUR,
     MoneyDepositEvent,
     MoneyWithdrawalEvent,
     MoneyTransferEvent,
@@ -206,7 +204,9 @@ class ReportData:
         self.report_events.extend(BuyEvent.from_report(raw_data.buy_orders))
         self.report_events.extend(SellEvent.from_report(raw_data.sell_orders))
         self.report_events.extend(
-            CurrencyConversionEvent.from_report(raw_data.currency_conversions)
+            CurrencyConversionEvent.from_report(
+                raw_data.currency_conversions, daily_rates=self.daily_rates
+            )
         )
         if raw_data.stock_splits is not None:
             self.report_events.extend(
@@ -370,40 +370,29 @@ class ReportData:
                     withdrawn_amount = tmp
                 self.withdrawn_forex[event.currency].extend(withdrawn_amount)
 
-            elif isinstance(event, CurrencyConversionEventFromEURToForex):
+            elif isinstance(event, CurrencyConversionEvent):
+                sold_forex = self.held_forex[event.source_currency].pop(
+                    event.source_amount, to_decimal(1), event.date
+                )
+                if event.source_currency != "EUR":
+                    self.sold_forex[event.source_currency].extend(sold_forex)
+
+                new_forex_amount = event.target_amount
+                if event.target_fees is not None:
+                    new_forex_amount -= event.target_fees.amount
+
                 new_forex = FIFOForex(
                     currency=event.target_currency,
-                    quantity=event.foreign_amount,
+                    quantity=new_forex_amount,
                     buy_date=event.date,
-                    source=f"Currency Conversion EUR to {event.target_currency}",
+                    source=f"Currency Conversion {event.source_currency} to {event.target_currency}",
                 )
                 self.held_forex[event.target_currency].push(new_forex)
-                sold_eur = event.foreign_amount / get_daily_rate(
-                    self.daily_rates, event.date, event.target_currency
-                )
-                self.held_forex["EUR"].pop(sold_eur, to_decimal(1), event.date)
-                if event.source_fees is not None:
-                    self.misc["Fees"].append(event.source_fees)
 
-            elif isinstance(event, CurrencyConversionEventFromForexToEUR):
-                tmp = self.held_forex[event.source_currency].pop(
-                    event.foreign_amount,
-                    to_decimal(1),
-                    event.date,
-                )
-                recv_eur = event.foreign_amount / get_daily_rate(
-                    self.daily_rates, event.date, event.source_currency
-                )
-                recv_eur_forex = FIFOForex(
-                    currency="EUR",
-                    quantity=recv_eur,
-                    buy_date=event.date,
-                    source=f"Currency Conversion {event.source_currency} to EUR",
-                )
-                self.held_forex["EUR"].push(recv_eur_forex)
-                self.sold_forex[event.source_currency].extend(tmp)
                 if event.source_fees is not None:
                     self.misc["Fees"].append(event.source_fees)
+                if event.target_fees is not None:
+                    self.misc["Fees"].append(event.target_fees)
 
             elif isinstance(event, StockSplitEvent):
                 if self.apply_stock_splits:

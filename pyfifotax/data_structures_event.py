@@ -20,7 +20,7 @@ from pyfifotax.data_structures_dataframe import (
     MoneyTransferRow,
     StockSplitRow,
 )
-from pyfifotax.utils import to_decimal, round_decimal
+from pyfifotax.utils import to_decimal, round_decimal, get_daily_rate
 
 
 class EventPriority(Enum):
@@ -30,10 +30,11 @@ class EventPriority(Enum):
     MONEY_DEPOSIT: int = 1
     CURRENCY_CONVERSION_FROM_EUR_TO_FOREX = 2
     SELL: int = 3
-    BUY: int = 4
-    CURRENCY_CONVERSION_FROM_FOREX_TO_EUR = 5
-    MONEY_WITHDRAWAL: int = 6
-    STOCK_SPLIT: int = 7  # at the end as assumed after market-close
+    CURRENCY_CONVERSION_FROM_FOREX_TO_FOREX = 4
+    BUY: int = 5
+    CURRENCY_CONVERSION_FROM_FOREX_TO_EUR = 6
+    MONEY_WITHDRAWAL: int = 7
+    STOCK_SPLIT: int = 8  # at the end as assumed after market-close
 
 
 class ReportEvent:
@@ -42,14 +43,14 @@ class ReportEvent:
         self.priority = priority.value
 
     @staticmethod
-    def from_df_row(row: Series) -> ReportEvent:
+    def from_df_row(df_row: Series, **kwargs) -> ReportEvent:
         raise NotImplementedError
 
     @classmethod
-    def from_report(cls, df: pd.DataFrame) -> list[ReportEvent]:
+    def from_report(cls, df: pd.DataFrame, **kwargs) -> list[ReportEvent]:
         events = []
         for _, row in df.iterrows():
-            events.append(cls.from_df_row(row))
+            events.append(cls.from_df_row(row, **kwargs))
         return events
 
     def __repr__(self) -> str:
@@ -70,7 +71,7 @@ class RSUEvent(ReportEvent):
         self.withheld_shares = withheld_shares
 
     @staticmethod
-    def from_df_row(df_row: Series) -> RSUEvent:
+    def from_df_row(df_row: Series, **kwargs) -> RSUEvent:
         row = RSURow.from_df_row(df_row)
         recv_share = FIFOShare(
             buy_date=row.date,
@@ -112,7 +113,7 @@ class DividendEvent(ReportEvent):
         self.withheld_tax = withheld_tax
 
     @staticmethod
-    def from_df_row(df_row: Series) -> DividendEvent:
+    def from_df_row(df_row: Series, **kwargs) -> DividendEvent:
         row = DividendRow.from_df_row(df_row)
         gross_amount = to_decimal(row.amount)
         tax_amount = to_decimal(row.tax_withholding)
@@ -164,7 +165,7 @@ class ESPPEvent(ReportEvent):
         self.received_shares = received_shares
 
     @staticmethod
-    def from_df_row(df_row: Series) -> ESPPEvent:
+    def from_df_row(df_row: Series, **kwargs) -> ESPPEvent:
         row = ESPPRow.from_df_row(df_row)
         quantity = to_decimal(row.quantity)
         buy_price = to_decimal(row.buy_price)
@@ -210,7 +211,7 @@ class BuyEvent(ReportEvent):
         self.currency = currency
 
     @staticmethod
-    def from_df_row(df_row: Series) -> BuyEvent:
+    def from_df_row(df_row: Series, **kwargs) -> BuyEvent:
         row = BuyOrderRow.from_df_row(df_row)
         buy_price = to_decimal(row.buy_price)
         quantity = to_decimal(row.quantity)
@@ -273,7 +274,7 @@ class SellEvent(ReportEvent):
         self.paid_fees = paid_fees
 
     @staticmethod
-    def from_df_row(df_row: Series) -> SellEvent:
+    def from_df_row(df_row: Series, **kwargs) -> SellEvent:
         row = SellOrderRow.from_df_row(df_row)
         sell_price = to_decimal(row.sell_price)
         quantity = to_decimal(row.quantity)
@@ -317,23 +318,32 @@ class CurrencyConversionEvent(ReportEvent):
     def __init__(
         self,
         date: datetime.date,
-        foreign_amount: decimal.Decimal,
+        source_amount: decimal.Decimal,
         source_fees: Optional[Forex],
         source_currency: str,
+        target_amount: decimal.Decimal,
+        target_fees: Optional[Forex],
         target_currency: str,
         priority: EventPriority,
     ):
         super().__init__(date, priority)
-        self.foreign_amount = foreign_amount
+        self.source_amount = source_amount
         self.source_fees = source_fees
         self.source_currency = source_currency
+        self.target_amount = target_amount
+        self.target_fees = target_fees
         self.target_currency = target_currency
 
     @staticmethod
-    def from_df_row(df_row: Series) -> CurrencyConversionEvent:
+    def from_df_row(df_row: Series, **kwargs) -> CurrencyConversionEvent:
+        daily_rates = kwargs["daily_rates"]
         row = CurrencyConversionRow.from_df_row(df_row)
         if row.source_fees < 0.0:
             msg = f"For Transaction on {row.date}, fee of {row.source_fees} {row.source_currency} is negative."
+            raise ValueError(msg)
+
+        if row.target_fees < 0.0:
+            msg = f"For Transaction on {row.date}, fee of {row.target_fees} {row.target_currency} is negative."
             raise ValueError(msg)
 
         if row.source_fees > 0.0:
@@ -346,61 +356,73 @@ class CurrencyConversionEvent(ReportEvent):
         else:
             source_fees = None
 
+        if row.target_fees > 0.0:
+            target_fees = Forex(
+                currency=row.target_currency,
+                date=row.date,
+                amount=to_decimal(row.target_fees),
+                comment=f"Fees for converting {row.source_currency} to {row.target_currency}",
+            )
+        else:
+            target_fees = None
+
         if row.source_currency == "EUR" and row.target_currency != "EUR":
-            return CurrencyConversionEventFromEURToForex(
+            if row.source_amount < 0.0:
+                source_amount = to_decimal(row.target_amount) / get_daily_rate(
+                    daily_rates, row.date, row.source_currency
+                )
+            else:
+                source_amount = to_decimal(row.source_amount)
+
+            return CurrencyConversionEvent(
                 row.date,
-                to_decimal(row.foreign_amount),
+                source_amount,
                 source_fees,
+                "EUR",
+                to_decimal(row.target_amount),
+                target_fees,
                 row.target_currency,
+                EventPriority.CURRENCY_CONVERSION_FROM_EUR_TO_FOREX,
             )
 
         if row.source_currency != "EUR" and row.target_currency == "EUR":
-            return CurrencyConversionEventFromForexToEUR(
+            if row.target_amount < 0.0:
+                target_amount = to_decimal(row.source_amount) / get_daily_rate(
+                    daily_rates, row.date, row.source_currency
+                )
+            else:
+                target_amount = to_decimal(row.target_amount)
+            return CurrencyConversionEvent(
                 row.date,
-                to_decimal(row.foreign_amount),
+                to_decimal(row.source_amount),
                 source_fees,
                 row.source_currency,
+                target_amount,
+                target_fees,
+                "EUR",
+                EventPriority.CURRENCY_CONVERSION_FROM_FOREX_TO_EUR,
+            )
+
+        if row.source_currency != "EUR" and row.target_currency != "EUR":
+            if row.source_amount < 0.0 or row.target_amount < 0.0:
+                raise ValueError(
+                    "Conversions between two different FOREX must include explicit source and target amounts."
+                )
+
+            return CurrencyConversionEvent(
+                row.date,
+                to_decimal(row.source_amount),
+                source_fees,
+                row.source_currency,
+                to_decimal(row.target_amount),
+                target_fees,
+                row.target_currency,
+                EventPriority.CURRENCY_CONVERSION_FROM_FOREX_TO_FOREX,
             )
 
         msg = "Only support currency conversions between one foreign currency and EUR"
         msg += f" but got {row.source_currency} and {row.target_currency} respectively."
         raise ValueError(msg)
-
-
-class CurrencyConversionEventFromEURToForex(CurrencyConversionEvent):
-    def __init__(
-        self,
-        date: datetime.date,
-        foreign_amount: decimal.Decimal,
-        source_fees: Optional[Forex],
-        target_currency: str,
-    ):
-        super().__init__(
-            date,
-            foreign_amount,
-            source_fees,
-            "EUR",
-            target_currency,
-            EventPriority.CURRENCY_CONVERSION_FROM_EUR_TO_FOREX,
-        )
-
-
-class CurrencyConversionEventFromForexToEUR(CurrencyConversionEvent):
-    def __init__(
-        self,
-        date: datetime.date,
-        foreign_amount: decimal.Decimal,
-        source_fees: Optional[Forex],
-        source_currency: str,
-    ):
-        super().__init__(
-            date,
-            foreign_amount,
-            source_fees,
-            source_currency,
-            "EUR",
-            EventPriority.CURRENCY_CONVERSION_FROM_FOREX_TO_EUR,
-        )
 
 
 class MoneyTransferEvent(ReportEvent):
@@ -420,7 +442,7 @@ class MoneyTransferEvent(ReportEvent):
         self.currency = currency
 
     @staticmethod
-    def from_df_row(df_row: Series) -> MoneyTransferEvent:
+    def from_df_row(df_row: Series, **kwargs) -> MoneyTransferEvent:
         row = MoneyTransferRow.from_df_row(df_row)
         if row.fees > 0.0:
             fees = Forex(
@@ -479,7 +501,7 @@ class StockSplitEvent(ReportEvent):
         self.shares_after_split = shares_after_split
 
     @staticmethod
-    def from_df_row(df_row: Series) -> StockSplitEvent:
+    def from_df_row(df_row: Series, **kwargs) -> StockSplitEvent:
         row = StockSplitRow.from_df_row(df_row)
         return StockSplitEvent(
             date=row.date,
