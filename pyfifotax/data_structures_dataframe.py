@@ -478,7 +478,7 @@ class MoneyTransferRow(DataFrameRow):
         return MoneyTransferRow(
             date,
             date,  # not relevant
-            -foreign_amount,
+            -foreign_amount - fees,
             fees,
             "USD",
             "Automated Schwab Import (JSON, Wire Transfer)",

@@ -387,11 +387,17 @@ class CurrencyConversionEvent(ReportEvent):
 
         if row.source_currency != "EUR" and row.target_currency == "EUR":
             if row.target_amount < 0.0:
-                target_amount = to_decimal(row.source_amount) / get_daily_rate(
-                    daily_rates, row.date, row.source_currency
-                )
+                if source_fees is not None:
+                    target_amount = (
+                        to_decimal(row.source_amount) - source_fees.amount
+                    ) / get_daily_rate(daily_rates, row.date, row.source_currency)
+                else:
+                    target_amount = to_decimal(row.source_amount) / get_daily_rate(
+                        daily_rates, row.date, row.source_currency
+                    )
             else:
                 target_amount = to_decimal(row.target_amount)
+
             return CurrencyConversionEvent(
                 row.date,
                 to_decimal(row.source_amount),

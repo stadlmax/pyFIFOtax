@@ -350,9 +350,14 @@ class ReportData:
                     self.misc["Fees"].append(event.fees)
 
             elif isinstance(event, MoneyWithdrawalEvent):
-                if event.fees is not None:
-                    self.misc["Fees"].append(event.fees)
                 try:
+                    if event.fees is not None:
+                        # first pop fees, later not tracked in withdrawn amount (only in fees)
+                        self.held_forex[event.currency].pop(
+                            event.fees.amount, to_decimal(1), event.date
+                        )
+                        self.misc["Fees"].append(event.fees)
+
                     # you withdraw from this account the full amount, but other account only receives
                     # the value after fees (withdrawal amount doesn't include fees)
                     withdrawn_amount = event.amount
