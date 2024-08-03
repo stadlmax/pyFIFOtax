@@ -372,26 +372,32 @@ class BuyOrderRow(DataFrameRow):
 @dataclass
 class CurrencyConversionRow(DataFrameRow):
     date: datetime.date
-    foreign_amount: np.float64
+    source_amount: np.float64
     source_fees: np.float64
     source_currency: str
+    target_amount: np.float64
+    target_fees: np.float64
     target_currency: str
     comment: str
 
     @staticmethod
     def from_schwab_json(json_dict: dict) -> CurrencyConversionRow:
         date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
-        fees = pd.to_numeric(
+        source_fees = pd.to_numeric(
             json_dict["FeesAndCommissions"].strip("-$").replace(",", "")
         )
-        if np.isnan(fees):
-            fees = pd.to_numeric("0.0")
-        foreign_amount = pd.to_numeric(json_dict["Amount"].strip("-$").replace(",", ""))
+        if np.isnan(source_fees):
+            source_fees = np.float64(0)
+        target_fees = np.float64(0)
+        target_amount = np.float64(-1)
+        source_amount = pd.to_numeric(json_dict["Amount"].strip("-$").replace(",", ""))
         return CurrencyConversionRow(
             date,
-            foreign_amount,
-            fees,
+            source_amount,
+            source_fees,
             "USD",
+            target_amount,
+            target_fees,
             "EUR",
             "Automated Schwab Import (JSON, Currency Conversion from Wire Transfer, check correctness!)",
         )
@@ -399,16 +405,25 @@ class CurrencyConversionRow(DataFrameRow):
     @staticmethod
     def default_dict() -> dict:
         return CurrencyConversionRow(
-            datetime.date(1, 1, 1), np.float64(0), np.float64(0), "", "", ""
+            datetime.date(1, 1, 1),
+            np.float64(0),
+            np.float64(0),
+            "",
+            np.float64(0),
+            np.float64(0),
+            "",
+            "",
         ).to_dict()
 
     @staticmethod
     def from_df_row(row: Series) -> CurrencyConversionRow:
         return CurrencyConversionRow(
             row.date.date(),
-            row.foreign_amount,
+            row.source_amount,
             row.source_fees,
             row.source_currency,
+            row.target_amount,
+            row.target_fees,
             row.target_currency,
             row.comment,
         )
