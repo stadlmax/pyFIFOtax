@@ -236,6 +236,7 @@ class BuyEvent(ReportEvent):
                 amount=fees,
                 comment=f"Fees for Buy Order ({quantity:.2f} x {row.symbol})",
             )
+            recv_shares.buy_cost = paid_fees.amount / recv_shares.quantity
         else:
             paid_fees = None
 
@@ -244,6 +245,7 @@ class BuyEvent(ReportEvent):
         # is rounded to full cents
         # TODO: check if rounding mode matches schwab
         cost_of_shares = round_decimal(buy_price * quantity + fees, precision="0.01")
+
         return BuyEvent(
             row.date,
             row.symbol,
@@ -366,6 +368,7 @@ class CurrencyConversionEvent(ReportEvent):
         else:
             target_fees = None
 
+        # conversion from EUR to FOREX
         if row.source_currency == "EUR" and row.target_currency != "EUR":
             if row.source_amount < 0.0:
                 source_amount = to_decimal(row.target_amount) / get_daily_rate(
@@ -385,6 +388,7 @@ class CurrencyConversionEvent(ReportEvent):
                 EventPriority.CURRENCY_CONVERSION_FROM_EUR_TO_FOREX,
             )
 
+        # conversion from FOREX to EUR
         if row.source_currency != "EUR" and row.target_currency == "EUR":
             if row.target_amount < 0.0:
                 if source_fees is not None:
@@ -409,6 +413,7 @@ class CurrencyConversionEvent(ReportEvent):
                 EventPriority.CURRENCY_CONVERSION_FROM_FOREX_TO_EUR,
             )
 
+        # conversion from FOREX to FOREX
         if row.source_currency != "EUR" and row.target_currency != "EUR":
             if row.source_amount < 0.0 or row.target_amount < 0.0:
                 raise ValueError(
@@ -426,8 +431,10 @@ class CurrencyConversionEvent(ReportEvent):
                 EventPriority.CURRENCY_CONVERSION_FROM_FOREX_TO_FOREX,
             )
 
-        msg = "Only support currency conversions between one foreign currency and EUR"
-        msg += f" but got {row.source_currency} and {row.target_currency} respectively."
+        msg = (
+            "Detected Currency Conversion from EUR to EUR, aborting processing of data."
+            " In case you want to specify a deposit or a withdrawal of EUR, check the tab for money transfers."
+        )
         raise ValueError(msg)
 
 
@@ -451,11 +458,14 @@ class MoneyTransferEvent(ReportEvent):
     def from_df_row(df_row: Series, **kwargs) -> MoneyTransferEvent:
         row = MoneyTransferRow.from_df_row(df_row)
         if row.fees > 0.0:
+            fee_comment = "Fees for Transfer"
+            if row.comment != "":
+                fee_comment += f" ({row.comment})"
             fees = Forex(
                 currency=row.currency,
                 date=row.date,
                 amount=to_decimal(row.fees),
-                comment="Fees for Transfer of Transfer",
+                comment=fee_comment,
             )
         else:
             fees = None

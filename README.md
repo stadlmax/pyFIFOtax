@@ -33,6 +33,7 @@ The tab for money transfers allows to track withdrawals (negative deposits) and 
 - for deposits, indicate a positive amount as inflow to your account and the date of deposit under `date`; since taxation of FOREX transactions follows a FIFO principle, too, you also have to know the initial `buy_date` (or acquisition date) of the foreign currency such that later sell transactions can be correctly valued. The fee in this case is applied to the amount after flowing into the account, i.e. the deposited amount is the one before fees.
 - for deposits in EUR, `buy_date` isn't relevant and you can treat it similarly to withdrawals of any other currency (e.g. just setting it to the same value as the transaction)
 - note that in general, only the EUR balance can become negative and errors will be thrown if FOREX balances are to become negative
+- if you want to denote fees which are not tracked anywhere else, just include a row for a withdrawal of that amount and set the fee to that amount
 
 You can generate a list of withdrawals including the relevant `buy_date` information for use in other accounts. Note that these values are the net values after applying potential withdrawal fees.
 
