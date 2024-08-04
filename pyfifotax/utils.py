@@ -25,6 +25,10 @@ def get_date(forex):
     return forex.date
 
 
+def get_transact_date(fifo_object):
+    return fifo_object.sell_date
+
+
 def round_decimal(number: decimal.Decimal, precision: str):
     return number.quantize(
         decimal.Decimal(precision),
@@ -579,8 +583,6 @@ def forex_dict_to_df(forex_dict, mode):
 def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
     for v in trans_dict.values():
         for f in v:
-            buy_price, sell_price = to_decimal(f.buy_price), to_decimal(f.sell_price)
-
             # exchange rates are in 1 EUR : X FOREX
             buy_rate_daily = get_daily_rate(daily_rates, f.buy_date, f.currency)
             buy_rate_monthly = get_monthly_rate(monthly_rates, f.buy_date, f.currency)
@@ -588,10 +590,29 @@ def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
             sell_rate_daily = get_daily_rate(daily_rates, f.sell_date, f.currency)
             sell_rate_monthly = get_monthly_rate(monthly_rates, f.sell_date, f.currency)
 
-            f.buy_price_eur_daily = buy_price / buy_rate_daily
-            f.buy_price_eur_monthly = buy_price / buy_rate_monthly
-            f.sell_price_eur_daily = sell_price / sell_rate_daily
-            f.sell_price_eur_monthly = sell_price / sell_rate_monthly
+            if f.buy_cost is not None:
+                f.buy_cost_eur_daily = f.buy_cost / buy_rate_daily
+                f.buy_cost_eur_monthly = f.buy_cost / buy_rate_monthly
+            else:
+                f.buy_cost_eur_daily = to_decimal(0.0)
+                f.buy_cost_eur_monthly = to_decimal(0.0)
+            f.buy_price_eur_daily = f.buy_price / buy_rate_daily
+            f.buy_price_eur_monthly = f.buy_price / buy_rate_monthly
+            if f.sell_cost is not None:
+                f.sell_cost_eur_daily = f.sell_cost / sell_rate_daily
+                f.sell_cost_eur_monthly = f.sell_cost / sell_rate_monthly
+            else:
+                f.sell_cost_eur_daily = to_decimal(0.0)
+                f.sell_cost_eur_monthly = to_decimal(0.0)
+            f.sell_price_eur_daily = f.sell_price / sell_rate_daily
+            f.sell_price_eur_monthly = f.sell_price / sell_rate_monthly
+
+            f.cost_eur_daily = f.quantity * (
+                f.buy_cost_eur_daily + f.sell_cost_eur_daily
+            )
+            f.cost_eur_monthly = f.quantity * (
+                f.buy_cost_eur_monthly + f.sell_cost_eur_monthly
+            )
             f.gain_eur_daily = f.quantity * (
                 f.sell_price_eur_daily - f.buy_price_eur_daily
             )
@@ -600,23 +621,19 @@ def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
             )
 
 
-def filter_transact_dict(trans_dict, report_year, speculative_period=None):
+def filter_transact_dict(trans_dict, report_year, drop_symbols):
     filtered_dict = {k: [] for k in trans_dict.keys()}
     for k, v in trans_dict.items():
         for f in v:
             # filter based on sell date
-            if f.sell_date.year == report_year:
-                if speculative_period is None:
-                    filtered_dict[k].append(f)
-                elif f.currency == "EUR":
-                    filtered_dict[k].append(f)
-                elif (f.sell_date - f.buy_date).days < speculative_period * 365:
-                    filtered_dict[k].append(f)
-
+            if f.sell_date.year == report_year and f.symbol not in drop_symbols:
+                filtered_dict[k].append(f)
+    for _, v in filtered_dict.items():
+        v.sort(key=get_transact_date)
     return filtered_dict
 
 
-def transact_dict_to_df(transact_dict, mode):
+def transact_dict_to_df(transact_dict, mode, consider_costs, speculative_period=None):
     assert mode.lower() in ["daily", "monthly"]
     tmp = {
         "Symbol": [],
@@ -629,6 +646,11 @@ def transact_dict_to_df(transact_dict, mode):
         "Sell Price [EUR]": [],
         "Gain [EUR]": [],
     }
+    if consider_costs:
+        tmp["Transaction Costs [EUR]"] = []
+        tmp["Gain before Costs [EUR]"] = []
+    if speculative_period is not None:
+        tmp["Comment"] = []
 
     for k, v in transact_dict.items():
         for f in v:
@@ -646,6 +668,28 @@ def transact_dict_to_df(transact_dict, mode):
             tmp["Sell Date"].append(sell_date)
             tmp["Buy Price"].append(f"{f.buy_price:.2f} {f.currency}")
             tmp["Sell Price"].append(f"{f.sell_price:.2f} {f.currency}")
+
+            holding_period = (f.sell_date - f.buy_date).days
+            tax_free = (speculative_period is not None) and (
+                holding_period > speculative_period * 365
+            )
+
+            if tax_free:
+                if consider_costs:
+                    tmp["Gain before Costs [EUR]"].append(
+                        round_decimal(to_decimal(0.0), precision="0.01")
+                    )
+                    tmp["Transaction Costs [EUR]"].append(
+                        round_decimal(to_decimal(0.0), precision="0.01")
+                    )
+                    tmp["Gain [EUR]"].append(
+                        round_decimal(to_decimal(0.0), precision="0.01")
+                    )
+                else:
+                    tmp["Gain [EUR]"].append(
+                        round_decimal(to_decimal(0.0), precision="0.01")
+                    )
+
             if mode.lower() == "daily":
                 tmp["Buy Price [EUR]"].append(
                     round_decimal(f.buy_price_eur_daily, precision="0.01")
@@ -653,9 +697,23 @@ def transact_dict_to_df(transact_dict, mode):
                 tmp["Sell Price [EUR]"].append(
                     round_decimal(f.sell_price_eur_daily, precision="0.01")
                 )
-                tmp["Gain [EUR]"].append(
-                    round_decimal(f.gain_eur_daily, precision="0.01")
-                )
+                if not tax_free:
+                    if consider_costs:
+                        tmp["Gain before Costs [EUR]"].append(
+                            round_decimal(f.gain_eur_daily, precision="0.01")
+                        )
+                        tmp["Transaction Costs [EUR]"].append(
+                            round_decimal(f.cost_eur_daily, precision="0.01")
+                        )
+                        tmp["Gain [EUR]"].append(
+                            round_decimal(
+                                f.gain_eur_daily - f.cost_eur_daily, precision="0.01"
+                            )
+                        )
+                    else:
+                        tmp["Gain [EUR]"].append(
+                            round_decimal(f.gain_eur_daily, precision="0.01")
+                        )
             else:
                 tmp["Buy Price [EUR]"].append(
                     round_decimal(f.buy_price_eur_monthly, precision="0.01")
@@ -663,13 +721,51 @@ def transact_dict_to_df(transact_dict, mode):
                 tmp["Sell Price [EUR]"].append(
                     round_decimal(f.sell_price_eur_monthly, precision="0.01")
                 )
-                tmp["Gain [EUR]"].append(
-                    round_decimal(f.gain_eur_monthly, precision="0.01")
-                )
+                if not tax_free:
+                    if consider_costs:
+                        tmp["Gain before Costs [EUR]"].append(
+                            round_decimal(f.gain_eur_monthly, precision="0.01")
+                        )
+                        tmp["Transaction Costs [EUR]"].append(
+                            round_decimal(f.cost_eur_monthly, precision="0.01")
+                        )
+                        tmp["Gain [EUR]"].append(
+                            round_decimal(
+                                f.gain_eur_monthly - f.cost_eur_monthly,
+                                precision="0.01",
+                            )
+                        )
+                    else:
+                        tmp["Gain [EUR]"].append(
+                            round_decimal(f.gain_eur_monthly, precision="0.01")
+                        )
 
-    df = pd.DataFrame(
-        tmp,
-        columns=[
+            if speculative_period is not None:
+                if tax_free:
+                    tmp["Comment"].append(
+                        f"Held for {holding_period} days, no taxable gains as outside of speculative period of {speculative_period} years."
+                    )
+                else:
+                    tmp["Comment"].append(
+                        f"Held for {holding_period} days, taxable gains as shorter within speculative period of {speculative_period} years."
+                    )
+
+    if consider_costs:
+        columns = [
+            "Symbol",
+            "Quantity",
+            "Buy Date",
+            "Sell Date",
+            "Buy Price",
+            "Sell Price",
+            "Buy Price [EUR]",
+            "Sell Price [EUR]",
+            "Gain before Costs [EUR]",
+            "Transaction Costs [EUR]",
+            "Gain [EUR]",
+        ]
+    else:
+        columns = [
             "Symbol",
             "Quantity",
             "Buy Date",
@@ -679,7 +775,14 @@ def transact_dict_to_df(transact_dict, mode):
             "Buy Price [EUR]",
             "Sell Price [EUR]",
             "Gain [EUR]",
-        ],
+        ]
+
+    if speculative_period is not None:
+        columns.append("Comment")
+
+    df = pd.DataFrame(
+        tmp,
+        columns=columns,
     )
 
     return df

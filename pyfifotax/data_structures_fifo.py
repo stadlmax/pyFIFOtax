@@ -2,7 +2,7 @@ import math
 import decimal
 import datetime
 import warnings
-from decimal import Decimal
+from typing import Optional
 
 from pyfifotax.utils import to_decimal
 
@@ -12,7 +12,7 @@ from pyfifotax.utils import to_decimal
 # bookkeeping of other monetary items
 class Forex:
     def __init__(
-        self, currency: str, date: datetime.date, amount: Decimal, comment: str
+        self, currency: str, date: datetime.date, amount: decimal.Decimal, comment: str
     ):
         self.currency = currency
         self.date = date
@@ -32,24 +32,32 @@ class FIFOObject:
     def __init__(
         self,
         symbol: str,
-        quantity: Decimal,
+        quantity: decimal.Decimal,
         buy_date: datetime.date,
-        buy_price: Decimal,
+        buy_price: decimal.Decimal,
         currency: str,
     ):
-        self.symbol = symbol
-        self.currency = currency
-        self.quantity = quantity
-        self.buy_date = buy_date
-        self.sell_date = None
-        self.buy_price = buy_price
-        self.buy_price_eur_daily = None
-        self.buy_price_eur_monthly = None
-        self.sell_price = None
-        self.sell_price_eur_daily = None
-        self.sell_price_eur_monthly = None
-        self.gain_eur_daily = None
-        self.gain_eur_monthly = None
+        self.symbol: str = symbol
+        self.currency: str = currency
+        self.quantity: decimal.Decimal = quantity
+        self.buy_date: datetime.date = buy_date
+        self.sell_date: Optional[datetime.date] = None
+        self.buy_price: decimal.Decimal = buy_price
+        self.buy_price_eur_daily: Optional[decimal.Decimal] = None
+        self.buy_price_eur_monthly: Optional[decimal.Decimal] = None
+        self.buy_cost: Optional[decimal.Decimal] = None
+        self.buy_cost_eur_daily: Optional[decimal.Decimal] = None
+        self.buy_cost_eur_monthly: Optional[decimal.Decimal] = None
+        self.sell_price: Optional[decimal.Decimal] = None
+        self.sell_price_eur_daily: Optional[decimal.Decimal] = None
+        self.sell_price_eur_monthly: Optional[decimal.Decimal] = None
+        self.sell_cost: Optional[decimal.Decimal] = None
+        self.sell_cost_eur_daily: Optional[decimal.Decimal] = None
+        self.sell_cost_eur_monthly: Optional[decimal.Decimal] = None
+        self.gain_eur_daily: Optional[decimal.Decimal] = None
+        self.gain_eur_monthly: Optional[decimal.Decimal] = None
+        self.cost_eur_daily: Optional[decimal.Decimal] = None
+        self.cost_eur_monthly: Optional[decimal.Decimal] = None
 
     def total_buy_value(self):
         return self.quantity * self.buy_price
@@ -61,7 +69,11 @@ class FIFOObject:
 # class representing a FOREX object subject to FIFO treatment
 class FIFOForex(FIFOObject):
     def __init__(
-        self, currency: str, quantity: Decimal, buy_date: datetime.date, source: str
+        self,
+        currency: str,
+        quantity: decimal.Decimal,
+        buy_date: datetime.date,
+        source: str,
     ):
         # "money" is always a single unit "money"
         super().__init__(currency, quantity, buy_date, to_decimal(1), currency)
@@ -131,12 +143,15 @@ class FIFOQueue:
         quantity: decimal.Decimal,
         sell_price: decimal.Decimal,
         sell_date: datetime.date,
+        sell_cost: Optional[decimal.Decimal] = None,
     ):
         if self.is_eur_queue:
             pop_asset = from_asset(self.peek(), quantity)
             # not really relevant, but leave them anyways
             pop_asset.sell_price = sell_price
             pop_asset.sell_date = sell_date
+            if sell_cost is not None:
+                pop_asset.sell_cost = sell_cost
             self.peek().quantity -= quantity
             self.total_quantity -= quantity
             return [pop_asset]
@@ -191,6 +206,8 @@ class FIFOQueue:
             pop_asset = from_asset(self.peek(), quantity)
             pop_asset.sell_price = sell_price
             pop_asset.sell_date = sell_date
+            if sell_cost is not None:
+                pop_asset.sell_cost = sell_cost
             self.peek().quantity -= quantity
             self.total_quantity -= quantity
             return [pop_asset]
@@ -199,6 +216,8 @@ class FIFOQueue:
             pop_asset = self.assets.pop(0)
             pop_asset.sell_date = sell_date
             pop_asset.sell_price = sell_price
+            if sell_cost is not None:
+                pop_asset.sell_cost = sell_cost
             return [pop_asset]
         else:
             # quantity is larger
@@ -206,9 +225,13 @@ class FIFOQueue:
             pop_asset = self.assets.pop(0)
             pop_asset.sell_price = sell_price
             pop_asset.sell_date = sell_date
+            if sell_cost is not None:
+                pop_asset.sell_cost = sell_cost
             self.total_quantity -= pop_asset.quantity
             remaining_quantity = quantity - pop_asset.quantity
-            return [pop_asset] + self.pop(remaining_quantity, sell_price, sell_date)
+            return [pop_asset] + self.pop(
+                remaining_quantity, sell_price, sell_date, sell_cost=sell_cost
+            )
 
     def __repr__(self):
         return self.assets.__repr__()

@@ -42,8 +42,12 @@ def test_summarize_report_order(file_name):
 
 
 example_outputs = [
-    ("daily", [914.25, 974.86, 247.01, 27.96, 29.9, 66.64]),
-    ("monthly", [829.32, 932.75, 294.1, 28.6, 29.54, 15.89]),
+    # slight change of test values as fees for buy/sell events
+    # are now considered as part of capital gains
+    # ("daily", [914.25, 974.86, 247.01, 27.96, 29.9, 66.64]),
+    # ("monthly", [829.32, 932.75, 294.1, 28.6, 29.54, 15.89]),
+    ("daily", [914.14, 974.81, 247.07, 27.96, 29.80, 66.64]),
+    ("monthly", [829.22, 932.71, 294.16, 28.60, 29.44, 15.89]),
 ]
 
 
@@ -61,8 +65,12 @@ def test_summarize_report_example(mode, desired: list):
 
 
 example_stock_split_outputs = [
-    ("daily", [6728.57, 6691.20, 149.03, 27.96, 29.9, 66.64]),
-    ("monthly", [6650.94, 6640.13, 179.86, 28.6, 29.54, 15.89]),
+    # slight change of test values as fees for buy/sell events
+    # are now considered as part of capital gains
+    # ("daily", [6728.57, 6691.20, 149.03, 27.96, 29.9, 66.64]),
+    # ("monthly", [6650.94, 6640.13, 179.86, 28.6, 29.54, 15.89]),
+    ("daily", [6728.47, 6691.13, 149.06, 27.96, 29.8, 66.64]),
+    ("monthly", [6650.83, 6640.05, 179.89, 28.6, 29.44, 15.89]),
 ]
 
 
@@ -89,7 +97,7 @@ def test_example_partial(file_name):
 def test_summarize_forex_simple_legacy():
     with pytest.deprecated_call():
         summary = get_elster_summary("forex_simple_legacy.xlsx", 2022, "daily")
-        assert_allclose(summary, [0, 0, 0, 0, 16, 0])
+        assert_allclose(summary, [-1, 0, 1, 0, 15, 0])
 
 
 def test_summarize_forex_next_exchange_date_legacy():

@@ -33,7 +33,6 @@ from pyfifotax.utils import (
     write_report,
     write_report_awv,
     create_report_sheet,
-    get_daily_rate,
 )
 from pyfifotax.utils import to_decimal
 
@@ -281,7 +280,12 @@ class ReportData:
                 self.awv_z10_events.append(bought_shares)
 
             elif isinstance(event, DividendEvent):
-                self.held_forex[event.currency].push(event.received_net_dividend)
+                if event.received_net_dividend.quantity > 0.0:
+                    self.held_forex[event.currency].push(event.received_net_dividend)
+                elif event.received_net_dividend.quantity < 0.0:
+                    self.held_forex[event.currency].pop(
+                        -event.received_net_dividend.quantity, to_decimal(1), event.date
+                    )
 
                 if event.withheld_tax is not None:
                     self.misc["Tax Withholding"].append(event.withheld_tax)
@@ -297,10 +301,8 @@ class ReportData:
                     event.date,
                 )
                 self.sold_forex[event.currency].extend(tmp)
-
+                # fees handled implicitly through cost of transaction
                 self.held_shares[event.symbol].push(event.received_shares)
-                if event.paid_fees is not None:
-                    self.misc["Fees"].append(event.paid_fees)
 
                 self.awv_z10_events.append(
                     awv.AWVEntryZ10Buy(
@@ -314,15 +316,19 @@ class ReportData:
 
             elif isinstance(event, SellEvent):
                 # if not enough shares to sell, pop on SHARE Queue will fail
+                if event.paid_fees is not None:
+                    sell_cost = event.paid_fees.amount / event.quantity
+                else:
+                    sell_cost = None
                 tmp = self.held_shares[event.symbol].pop(
-                    event.quantity, event.sell_price, event.date
+                    event.quantity,
+                    event.sell_price,
+                    event.date,
+                    sell_cost=sell_cost,
                 )
                 self.sold_shares[event.symbol].extend(tmp)
 
                 self.held_forex[event.currency].push(event.received_forex)
-
-                if event.paid_fees is not None:
-                    self.misc["Fees"].append(event.paid_fees)
 
                 self.awv_z10_events.append(
                     awv.AWVEntryZ10Sale(
@@ -335,6 +341,11 @@ class ReportData:
                 )
 
             elif isinstance(event, MoneyDepositEvent):
+                if event.fees is not None and event.amount < event.fees.amount:
+                    raise ValueError(
+                        "Deposited Amount is smaller than fees due, abort."
+                    )
+
                 new_forex = FIFOForex(
                     currency=event.currency,
                     quantity=(
@@ -346,6 +357,7 @@ class ReportData:
                     source=f"Deposit of Money",
                 )
                 self.held_forex[event.currency].push(new_forex)
+
                 if event.fees is not None:
                     self.misc["Fees"].append(event.fees)
 
@@ -364,23 +376,24 @@ class ReportData:
                     if event.fees is not None:
                         withdrawn_amount -= event.fees.amount
 
-                    tmp = self.held_forex[event.currency].pop(
-                        withdrawn_amount,
-                        to_decimal(1),
-                        event.date,
-                    )
+                    if withdrawn_amount > 0.0:
+                        tmp = self.held_forex[event.currency].pop(
+                            withdrawn_amount,
+                            to_decimal(1),
+                            event.date,
+                        )
+                        self.withdrawn_forex[event.currency].extend(tmp)
+
                 except ValueError:
                     raise ValueError(
                         f"Cannot withdraw {event.amount} {event.currency}, not enough owned."
                     )
-                self.withdrawn_forex[event.currency].extend(tmp)
 
             elif isinstance(event, CurrencyConversionEvent):
                 sold_forex = self.held_forex[event.source_currency].pop(
                     event.source_amount, to_decimal(1), event.date
                 )
-                if event.source_currency != "EUR":
-                    self.sold_forex[event.source_currency].extend(sold_forex)
+                self.sold_forex[event.source_currency].extend(sold_forex)
 
                 new_forex_amount = event.target_amount
                 if event.target_fees is not None:
@@ -394,6 +407,9 @@ class ReportData:
                 )
                 self.held_forex[event.target_currency].push(new_forex)
 
+                # fees here considered as part of Fees in general (not as cost of transactions)
+                # as FOREX likely is not taxed as Capital Gain, thus it should be fine to
+                # simplify things here and consider them as potential Werbungskosten
                 if event.source_fees is not None:
                     self.misc["Fees"].append(event.source_fees)
                 if event.target_fees is not None:
@@ -432,14 +448,22 @@ class ReportData:
         # for sold_shares and sold_forex: filter for sell-date in report_year
         # for sold_forex: also filter out entries where duration between buy and sell date
         # is more than 1 year (Spekulationsfrist, Privates Veräußerungsgeschäft)
-        filtered_sold_shares = filter_transact_dict(self.sold_shares, report_year)
+        filtered_sold_shares = filter_transact_dict(
+            self.sold_shares, report_year, drop_symbols=set()
+        )
         filtered_sold_forex = filter_transact_dict(
-            self.sold_forex, report_year, speculative_period=1
+            self.sold_forex,
+            report_year,
+            drop_symbols={"EUR"},
         )
 
         df_misc = forex_dict_to_df(misc_filtered, mode)
-        df_shares = transact_dict_to_df(filtered_sold_shares, mode)
-        df_forex = transact_dict_to_df(filtered_sold_forex, mode)
+        df_shares = transact_dict_to_df(
+            filtered_sold_shares, mode, consider_costs=True, speculative_period=None
+        )
+        df_forex = transact_dict_to_df(
+            filtered_sold_forex, mode, consider_costs=False, speculative_period=1
+        )
         df_forex = df_forex.drop(["Buy Price", "Sell Price"], axis="columns")
 
         res = (
