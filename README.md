@@ -136,6 +136,26 @@ Note the following limitations:
 * Schwab CSV converter was not tested with a fully upgraded account
 * Buy orders are currently not supported.
 
+## Concatenate multiple transactions spreadsheets
+
+If you have multiple transactions spreadsheets (probably as a result of having multiple exports) use the `concatenate.py` script to create one spreadsheet out of them.
+
+Parameters:
+
+```
+concatenate.py [-h] -o OUTPUT spreadsheets [spreadsheets ...]
+
+Concatenate multiple transactions spreadsheets into one
+
+positional arguments:
+  spreadsheets          Spreadsheets to concatenate
+
+options:
+  -h, --help            show this help message and exit
+  -o OUTPUT, --output OUTPUT
+                        Concatenated .xlsx file
+```
+
 # Further Use
 Since all the reporting is done in a naive Python implementation, one could easily use it to augment the data in other ways. `notebook_example.ipynb` for instance shows you how to retrieve certain results as `pd.DataFrame`.
 
