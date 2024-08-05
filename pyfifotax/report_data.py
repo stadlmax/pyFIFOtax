@@ -300,6 +300,11 @@ class ReportData:
                     to_decimal(1),
                     event.date,
                 )
+                if event.paid_fees is not None:
+                    self.held_forex[event.paid_fees.currency].pop(
+                        event.paid_fees.amount, to_decimal(1), event.date
+                    )
+
                 self.sold_forex[event.currency].extend(tmp)
                 # fees handled implicitly through cost of transaction
                 self.held_shares[event.symbol].push(event.received_shares)
@@ -318,17 +323,28 @@ class ReportData:
                 # if not enough shares to sell, pop on SHARE Queue will fail
                 if event.paid_fees is not None:
                     sell_cost = event.paid_fees.amount / event.quantity
+                    sell_cost_currency = event.paid_fees.currency
                 else:
                     sell_cost = None
+                    sell_cost_currency = None
+
                 tmp = self.held_shares[event.symbol].pop(
                     event.quantity,
                     event.sell_price,
                     event.date,
                     sell_cost=sell_cost,
+                    sell_cost_currency=sell_cost_currency,
                 )
                 self.sold_shares[event.symbol].extend(tmp)
 
                 self.held_forex[event.currency].push(event.received_forex)
+
+                if event.paid_fees is not None:
+                    self.held_forex[event.paid_fees.currency].pop(
+                        event.paid_fees.amount,
+                        to_decimal(1),
+                        event.date,
+                    )
 
                 self.awv_z10_events.append(
                     awv.AWVEntryZ10Sale(
@@ -341,53 +357,42 @@ class ReportData:
                 )
 
             elif isinstance(event, MoneyDepositEvent):
-                if event.fees is not None and event.amount < event.fees.amount:
-                    raise ValueError(
-                        "Deposited Amount is smaller than fees due, abort."
+                if event.amount > 0:
+                    new_forex = FIFOForex(
+                        currency=event.currency,
+                        quantity=(
+                            event.amount if event.fees is not None else event.amount
+                        ),
+                        buy_date=event.buy_date,
+                        source=f"Deposit of Money",
                     )
+                    self.held_forex[event.currency].push(new_forex)
 
-                new_forex = FIFOForex(
-                    currency=event.currency,
-                    quantity=(
-                        event.amount - event.fees.amount
-                        if event.fees is not None
-                        else event.amount
-                    ),
-                    buy_date=event.buy_date,
-                    source=f"Deposit of Money",
-                )
-                self.held_forex[event.currency].push(new_forex)
+                if event.fees is not None:
+                    self.held_forex[event.fees.currency].pop(
+                        event.fees.amount,
+                        to_decimal(1),
+                        event.date,
+                    )
 
                 if event.fees is not None:
                     self.misc["Fees"].append(event.fees)
 
             elif isinstance(event, MoneyWithdrawalEvent):
-                try:
-                    if event.fees is not None:
-                        # first pop fees, later not tracked in withdrawn amount (only in fees)
-                        self.held_forex[event.currency].pop(
-                            event.fees.amount, to_decimal(1), event.date
-                        )
-                        self.misc["Fees"].append(event.fees)
-
-                    # you withdraw from this account the full amount, but other account only receives
-                    # the value after fees (withdrawal amount doesn't include fees)
-                    withdrawn_amount = event.amount
-                    if event.fees is not None:
-                        withdrawn_amount -= event.fees.amount
-
-                    if withdrawn_amount > 0.0:
-                        tmp = self.held_forex[event.currency].pop(
-                            withdrawn_amount,
-                            to_decimal(1),
-                            event.date,
-                        )
-                        self.withdrawn_forex[event.currency].extend(tmp)
-
-                except ValueError:
-                    raise ValueError(
-                        f"Cannot withdraw {event.amount} {event.currency}, not enough owned."
+                if event.amount > 0.0:
+                    tmp = self.held_forex[event.currency].pop(
+                        event.amount,
+                        to_decimal(1),
+                        event.date,
                     )
+                    self.withdrawn_forex[event.currency].extend(tmp)
+
+                if event.fees is not None:
+                    # first pop fees, later not tracked in withdrawn amount (only in fees)
+                    self.held_forex[event.currency].pop(
+                        event.fees.amount, to_decimal(1), event.date
+                    )
+                    self.misc["Fees"].append(event.fees)
 
             elif isinstance(event, CurrencyConversionEvent):
                 sold_forex = self.held_forex[event.source_currency].pop(
@@ -395,25 +400,26 @@ class ReportData:
                 )
                 self.sold_forex[event.source_currency].extend(sold_forex)
 
-                new_forex_amount = event.target_amount
-                if event.target_fees is not None:
-                    new_forex_amount -= event.target_fees.amount
-
                 new_forex = FIFOForex(
                     currency=event.target_currency,
-                    quantity=new_forex_amount,
+                    quantity=event.target_amount,
                     buy_date=event.date,
                     source=f"Currency Conversion {event.source_currency} to {event.target_currency}",
                 )
                 self.held_forex[event.target_currency].push(new_forex)
 
+                if event.fees is not None:
+                    self.held_forex[event.fees.currency].pop(
+                        event.fees.amount,
+                        to_decimal(1),
+                        event.date,
+                    )
+
                 # fees here considered as part of Fees in general (not as cost of transactions)
                 # as FOREX likely is not taxed as Capital Gain, thus it should be fine to
                 # simplify things here and consider them as potential Werbungskosten
-                if event.source_fees is not None:
-                    self.misc["Fees"].append(event.source_fees)
-                if event.target_fees is not None:
-                    self.misc["Fees"].append(event.target_fees)
+                if event.fees is not None:
+                    self.misc["Fees"].append(event.fees)
 
             elif isinstance(event, StockSplitEvent):
                 if self.apply_stock_splits:
@@ -435,7 +441,9 @@ class ReportData:
             self.monthly_rates,
         )
 
-    def consolidate_report(self, report_year, mode):
+    def consolidate_report(
+        self, report_year, mode, consider_dividend_forex_tax_free=True
+    ):
         if mode.lower() not in ["daily", "monthly"]:
             raise ValueError(
                 f"Expected exchange rate mode to be in (daily, monthly), got {mode}."
@@ -459,10 +467,18 @@ class ReportData:
 
         df_misc = forex_dict_to_df(misc_filtered, mode)
         df_shares = transact_dict_to_df(
-            filtered_sold_shares, mode, consider_costs=True, speculative_period=None
+            filtered_sold_shares,
+            mode,
+            consider_costs=True,
+            speculative_period=None,
+            consider_dividend_forex_tax_free=False,
         )
         df_forex = transact_dict_to_df(
-            filtered_sold_forex, mode, consider_costs=False, speculative_period=1
+            filtered_sold_forex,
+            mode,
+            consider_costs=False,
+            speculative_period=1,
+            consider_dividend_forex_tax_free=consider_dividend_forex_tax_free,
         )
         df_forex = df_forex.drop(["Buy Price", "Sell Price"], axis="columns")
 
@@ -526,8 +542,16 @@ class ReportData:
             report_file_name,
         )
 
-    def create_excel_report(self, report_year, mode, report_file_name):
-        dfs = self.consolidate_report(report_year, mode)
+    def create_excel_report(
+        self,
+        report_year,
+        mode,
+        report_file_name,
+        consider_dividend_forex_tax_free=True,
+    ):
+        dfs = self.consolidate_report(
+            report_year, mode, consider_dividend_forex_tax_free
+        )
         write_report(
             *dfs,
             self.sub_dir,
@@ -558,7 +582,9 @@ class ReportData:
         ) as writer:
             create_report_sheet("withdrawals", df, writer)
 
-    def create_all_reports(self, awv_threshold_eur=12_500):
+    def create_all_reports(
+        self, awv_threshold_eur=12_500, consider_dividend_forex_tax_free=True
+    ):
         report_years = self.report_years
         self.create_withdrawal_report()
         for year in report_years:
@@ -568,5 +594,9 @@ class ReportData:
 
             daily_file_name = f"tax_report_{year}_daily_rates.xlsx"
             monthly_file_name = f"tax_report_{year}_monthly_rates.xlsx"
-            self.create_excel_report(year, "daily", daily_file_name)
-            self.create_excel_report(year, "monthly", monthly_file_name)
+            self.create_excel_report(
+                year, "daily", daily_file_name, consider_dividend_forex_tax_free
+            )
+            self.create_excel_report(
+                year, "monthly", monthly_file_name, consider_dividend_forex_tax_free
+            )

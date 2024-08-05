@@ -133,6 +133,7 @@ class DividendEvent(ReportEvent):
             buy_date=row.date,
             quantity=net_amount,
             source=f"Received Net Dividend Payment ({row.symbol})",
+            tax_free_forex=True,
         )
         if tax_amount > to_decimal(0.0):
             tax = Forex(
@@ -231,12 +232,13 @@ class BuyEvent(ReportEvent):
 
         if fees > to_decimal(0.0):
             paid_fees = Forex(
-                currency=row.currency,
+                currency=row.fee_currency,
                 date=row.date,
                 amount=fees,
                 comment=f"Fees for Buy Order ({quantity:.2f} x {row.symbol})",
             )
             recv_shares.buy_cost = paid_fees.amount / recv_shares.quantity
+            recv_shares.buy_cost_currency = row.fee_currency
         else:
             paid_fees = None
 
@@ -244,7 +246,7 @@ class BuyEvent(ReportEvent):
         # e.g. 100.7438, the deposited value, however,
         # is rounded to full cents
         # TODO: check if rounding mode matches schwab
-        cost_of_shares = round_decimal(buy_price * quantity + fees, precision="0.01")
+        cost_of_shares = round_decimal(buy_price * quantity, precision="0.01")
 
         return BuyEvent(
             row.date,
@@ -285,15 +287,11 @@ class SellEvent(ReportEvent):
         # e.g. 100.7438, the deposited value, however,
         # is rounded to full cents
         # TODO: check if rounding mode matches schwab
-        net_proceeds = sell_price * quantity - fees
-        net_proceeds = round_decimal(net_proceeds, precision="0.01")
-        if not (net_proceeds >= to_decimal(0.0)):
-            raise ValueError(
-                f"Expected non-negative net proceeds from sale of shares but got {net_proceeds}"
-            )
+        proceeds = sell_price * quantity
+
         new_forex = FIFOForex(
             currency=row.currency,
-            quantity=net_proceeds,
+            quantity=proceeds,
             buy_date=row.date,
             source="Sales Proceeds",
         )
@@ -303,7 +301,7 @@ class SellEvent(ReportEvent):
 
         if fees > to_decimal(0.0):
             fees = Forex(
-                currency=row.currency,
+                currency=row.fee_currency,
                 date=row.date,
                 amount=fees,
                 comment=f"Fees for Sell Order ({quantity:.2f} x {row.symbol})",
@@ -321,52 +319,36 @@ class CurrencyConversionEvent(ReportEvent):
         self,
         date: datetime.date,
         source_amount: decimal.Decimal,
-        source_fees: Optional[Forex],
         source_currency: str,
         target_amount: decimal.Decimal,
-        target_fees: Optional[Forex],
         target_currency: str,
+        fees: Optional[Forex],
         priority: EventPriority,
     ):
         super().__init__(date, priority)
         self.source_amount = source_amount
-        self.source_fees = source_fees
         self.source_currency = source_currency
         self.target_amount = target_amount
-        self.target_fees = target_fees
         self.target_currency = target_currency
+        self.fees = fees
 
     @staticmethod
     def from_df_row(df_row: Series, **kwargs) -> CurrencyConversionEvent:
         daily_rates = kwargs["daily_rates"]
         row = CurrencyConversionRow.from_df_row(df_row)
-        if row.source_fees < 0.0:
-            msg = f"For Transaction on {row.date}, fee of {row.source_fees} {row.source_currency} is negative."
+        if row.fees < 0.0:
+            msg = f"For Transaction on {row.date}, fee of {row.fees} {row.source_currency} is negative."
             raise ValueError(msg)
 
-        if row.target_fees < 0.0:
-            msg = f"For Transaction on {row.date}, fee of {row.target_fees} {row.target_currency} is negative."
-            raise ValueError(msg)
-
-        if row.source_fees > 0.0:
-            source_fees = Forex(
-                currency=row.source_currency,
+        if row.fees > 0.0:
+            fees = Forex(
+                currency=row.fee_currency,
                 date=row.date,
-                amount=to_decimal(row.source_fees),
+                amount=to_decimal(row.fees),
                 comment=f"Fees for converting {row.source_currency} to {row.target_currency}",
             )
         else:
-            source_fees = None
-
-        if row.target_fees > 0.0:
-            target_fees = Forex(
-                currency=row.target_currency,
-                date=row.date,
-                amount=to_decimal(row.target_fees),
-                comment=f"Fees for converting {row.source_currency} to {row.target_currency}",
-            )
-        else:
-            target_fees = None
+            fees = None
 
         # conversion from EUR to FOREX
         if row.source_currency == "EUR" and row.target_currency != "EUR":
@@ -380,36 +362,27 @@ class CurrencyConversionEvent(ReportEvent):
             return CurrencyConversionEvent(
                 row.date,
                 source_amount,
-                source_fees,
                 "EUR",
                 to_decimal(row.target_amount),
-                target_fees,
                 row.target_currency,
+                fees,
                 EventPriority.CURRENCY_CONVERSION_FROM_EUR_TO_FOREX,
             )
 
         # conversion from FOREX to EUR
         if row.source_currency != "EUR" and row.target_currency == "EUR":
             if row.target_amount < 0.0:
-                if source_fees is not None:
-                    target_amount = (
-                        to_decimal(row.source_amount) - source_fees.amount
-                    ) / get_daily_rate(daily_rates, row.date, row.source_currency)
-                else:
-                    target_amount = to_decimal(row.source_amount) / get_daily_rate(
-                        daily_rates, row.date, row.source_currency
-                    )
-            else:
-                target_amount = to_decimal(row.target_amount)
+                target_amount = to_decimal(row.source_amount) / get_daily_rate(
+                    daily_rates, row.date, row.source_currency
+                )
 
             return CurrencyConversionEvent(
                 row.date,
                 to_decimal(row.source_amount),
-                source_fees,
                 row.source_currency,
                 target_amount,
-                target_fees,
                 "EUR",
+                fees,
                 EventPriority.CURRENCY_CONVERSION_FROM_FOREX_TO_EUR,
             )
 
@@ -423,11 +396,10 @@ class CurrencyConversionEvent(ReportEvent):
             return CurrencyConversionEvent(
                 row.date,
                 to_decimal(row.source_amount),
-                source_fees,
                 row.source_currency,
                 to_decimal(row.target_amount),
-                target_fees,
                 row.target_currency,
+                fees,
                 EventPriority.CURRENCY_CONVERSION_FROM_FOREX_TO_FOREX,
             )
 
@@ -462,7 +434,7 @@ class MoneyTransferEvent(ReportEvent):
             if row.comment != "":
                 fee_comment += f" ({row.comment})"
             fees = Forex(
-                currency=row.currency,
+                currency=row.fee_currency,
                 date=row.date,
                 amount=to_decimal(row.fees),
                 comment=fee_comment,

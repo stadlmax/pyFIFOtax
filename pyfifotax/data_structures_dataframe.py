@@ -268,8 +268,9 @@ class SellOrderRow(DataFrameRow):
     symbol: str
     quantity: np.float64
     sell_price: np.float64
-    fees: np.float64
     currency: str
+    fees: np.float64
+    fee_currency: str
     comment: str
 
     @staticmethod
@@ -304,6 +305,7 @@ class SellOrderRow(DataFrameRow):
             symbol,
             quantity,
             sale_price,
+            "USD",
             fees,
             "USD",
             "Automated Schwab Import (JSON)",
@@ -316,6 +318,7 @@ class SellOrderRow(DataFrameRow):
             "",
             np.float64(0),
             np.float64(0),
+            "",
             np.float64(0),
             "",
             "",
@@ -328,8 +331,9 @@ class SellOrderRow(DataFrameRow):
             row.symbol,
             row.quantity,
             row.sell_price,
-            row.fees,
             row.currency,
+            row.fees,
+            row.fee_currency,
             row.comment,
         )
 
@@ -340,8 +344,9 @@ class BuyOrderRow(DataFrameRow):
     symbol: str
     quantity: np.float64
     buy_price: np.float64
-    fees: np.float64
     currency: str
+    fees: np.float64
+    fee_currency: str
     comment: str
 
     @staticmethod
@@ -351,6 +356,7 @@ class BuyOrderRow(DataFrameRow):
             "",
             np.float64(0),
             np.float64(0),
+            "",
             np.float64(0),
             "",
             "",
@@ -363,8 +369,9 @@ class BuyOrderRow(DataFrameRow):
             row.symbol,
             row.quantity,
             row.buy_price,
-            row.fees,
             row.currency,
+            row.fees,
+            row.fee_currency,
             row.comment,
         )
 
@@ -373,32 +380,31 @@ class BuyOrderRow(DataFrameRow):
 class CurrencyConversionRow(DataFrameRow):
     date: datetime.date
     source_amount: np.float64
-    source_fees: np.float64
     source_currency: str
     target_amount: np.float64
-    target_fees: np.float64
     target_currency: str
+    fees: np.float64
+    fee_currency: str
     comment: str
 
     @staticmethod
     def from_schwab_json(json_dict: dict) -> CurrencyConversionRow:
         date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
-        source_fees = pd.to_numeric(
+        fees = pd.to_numeric(
             json_dict["FeesAndCommissions"].strip("-$").replace(",", "")
         )
-        if np.isnan(source_fees):
-            source_fees = np.float64(0)
-        target_fees = np.float64(0)
+        if np.isnan(fees):
+            fees = np.float64(0)
         target_amount = np.float64(-1)
         source_amount = pd.to_numeric(json_dict["Amount"].strip("-$").replace(",", ""))
         return CurrencyConversionRow(
             date,
             source_amount,
-            source_fees,
             "USD",
             target_amount,
-            target_fees,
             "EUR",
+            fees,
+            "USD",
             "Automated Schwab Import (JSON, Currency Conversion from Wire Transfer, check correctness!)",
         )
 
@@ -407,9 +413,9 @@ class CurrencyConversionRow(DataFrameRow):
         return CurrencyConversionRow(
             datetime.date(1, 1, 1),
             np.float64(0),
-            np.float64(0),
             "",
             np.float64(0),
+            "",
             np.float64(0),
             "",
             "",
@@ -420,11 +426,11 @@ class CurrencyConversionRow(DataFrameRow):
         return CurrencyConversionRow(
             row.date.date(),
             row.source_amount,
-            row.source_fees,
             row.source_currency,
             row.target_amount,
-            row.target_fees,
             row.target_currency,
+            row.fees,
+            row.fee_currency,
             row.comment,
         )
 
@@ -434,8 +440,9 @@ class MoneyTransferRow(DataFrameRow):
     date: datetime.date
     buy_date: datetime.date
     amount: np.float64
-    fees: np.float64
     currency: str
+    fees: np.float64
+    fee_currency: str
     comment: str
 
     @staticmethod
@@ -444,6 +451,7 @@ class MoneyTransferRow(DataFrameRow):
             datetime.date(1, 1, 1),
             datetime.date(1, 1, 1),
             np.float64(0),
+            "",
             np.float64(0),
             "",
             "",
@@ -461,8 +469,9 @@ class MoneyTransferRow(DataFrameRow):
             row.date.date(),
             buy_date,
             row.amount,
-            row.fees,
             row.currency,
+            row.fees,
+            row.fee_currency,
             row.comment,
         )
 
@@ -478,7 +487,8 @@ class MoneyTransferRow(DataFrameRow):
         return MoneyTransferRow(
             date,
             date,  # not relevant
-            -foreign_amount - fees,
+            -foreign_amount,
+            "USD",
             fees,
             "USD",
             "Automated Schwab Import (JSON, Wire Transfer)",
