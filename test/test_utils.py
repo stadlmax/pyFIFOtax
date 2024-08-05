@@ -11,6 +11,7 @@ def get_elster_summary(
     year,
     mode,
     apply_stock_splits=True,
+    consider_dividend_forex_tax_free=True,
 ):
     # "legacy" transactions don't consider stock splits
     legacy_mode = "legacy" in file_name
@@ -22,7 +23,9 @@ def get_elster_summary(
         apply_stock_splits=apply_stock_splits,
     )
 
-    dfs = report.consolidate_report(year, mode)
+    dfs = report.consolidate_report(
+        year, mode, consider_dividend_forex_tax_free=consider_dividend_forex_tax_free
+    )
     summary = summarize_report(*dfs)
     return summary[summary.columns[2]].values.astype(np.float64)
 
@@ -44,39 +47,76 @@ def test_summarize_report_order(file_name):
 example_outputs = [
     # slight change of test values as fees for buy/sell events
     # are now considered as part of capital gains
-    # ("daily", [914.25, 974.86, 247.01, 27.96, 29.9, 66.64]),
-    # ("monthly", [829.32, 932.75, 294.1, 28.6, 29.54, 15.89]),
-    ("daily", [914.14, 974.81, 247.07, 27.96, 29.80, 66.64]),
-    ("monthly", [829.22, 932.71, 294.16, 28.60, 29.44, 15.89]),
+    # >>> ("daily", [914.25, 974.86, 247.01, 27.96, 29.9, 66.64]),
+    # >>> ("monthly", [829.32, 932.75, 294.1, 28.6, 29.54, 15.89]),
+    # slight change again as popping fees changes forex gains
+    # >>> ("daily", [914.14, 974.81, 247.07, 27.96, 29.80, 66.64]),
+    # >>> ("monthly", [829.22, 932.71, 294.16, 28.60, 29.44, 15.89]),
+    ("daily", False, [914.14, 974.81, 247.07, 27.96, 29.80, 66.75]),
+    ("monthly", False, [829.22, 932.71, 294.16, 28.60, 29.44, 16.31]),
+    ("daily", True, [914.14, 974.81, 247.07, 27.96, 29.80, 50.04]),
+    ("monthly", True, [829.22, 932.71, 294.16, 28.60, 29.44, 5.37]),
 ]
 
 
-@pytest.mark.parametrize("mode, desired", example_outputs)
-def test_summarize_report_example_legacy(mode, desired: list):
+@pytest.mark.parametrize(
+    "mode, consider_dividend_forex_tax_free, desired", example_outputs
+)
+def test_summarize_report_example_legacy(
+    mode, consider_dividend_forex_tax_free, desired
+):
     with pytest.deprecated_call():
-        summary = get_elster_summary("example_legacy.xlsx", 2022, mode)
+        summary = get_elster_summary(
+            "example_legacy.xlsx",
+            2022,
+            mode,
+            consider_dividend_forex_tax_free=consider_dividend_forex_tax_free,
+        )
         assert_allclose(summary, desired)
 
 
-@pytest.mark.parametrize("mode, desired", example_outputs)
-def test_summarize_report_example(mode, desired: list):
-    summary = get_elster_summary("example.xlsx", 2022, mode, apply_stock_splits=False)
+@pytest.mark.parametrize(
+    "mode, consider_dividend_forex_tax_free, desired", example_outputs
+)
+def test_summarize_report_example(mode, consider_dividend_forex_tax_free, desired):
+    summary = get_elster_summary(
+        "example.xlsx",
+        2022,
+        mode,
+        apply_stock_splits=False,
+        consider_dividend_forex_tax_free=consider_dividend_forex_tax_free,
+    )
     assert_allclose(summary, desired)
 
 
 example_stock_split_outputs = [
     # slight change of test values as fees for buy/sell events
     # are now considered as part of capital gains
-    # ("daily", [6728.57, 6691.20, 149.03, 27.96, 29.9, 66.64]),
-    # ("monthly", [6650.94, 6640.13, 179.86, 28.6, 29.54, 15.89]),
-    ("daily", [6728.47, 6691.13, 149.06, 27.96, 29.8, 66.64]),
-    ("monthly", [6650.83, 6640.05, 179.89, 28.6, 29.44, 15.89]),
+    # >>> ("daily", [6728.57, 6691.20, 149.03, 27.96, 29.9, 66.64]),
+    # >>> ("monthly", [6650.94, 6640.13, 179.86, 28.6, 29.54, 15.89]),
+    # ("daily", [6728.47, 6691.13, 149.06, 27.96, 29.8, 66.64]),
+    # ("monthly", [6650.83, 6640.05, 179.89, 28.6, 29.44, 15.89]),
+    # slight change again as popping fees changes forex gains
+    ("daily", False, [6728.47, 6691.13, 149.06, 27.96, 29.8, 66.75]),
+    ("monthly", False, [6650.83, 6640.05, 179.89, 28.6, 29.44, 16.31]),
+    ("daily", True, [6728.47, 6691.13, 149.06, 27.96, 29.8, 50.04]),
+    ("monthly", True, [6650.83, 6640.05, 179.89, 28.6, 29.44, 5.37]),
 ]
 
 
-@pytest.mark.parametrize("mode, desired", example_stock_split_outputs)
-def test_summarize_report_example_stock_splits(mode, desired: list):
-    summary = get_elster_summary("example.xlsx", 2022, mode, apply_stock_splits=True)
+@pytest.mark.parametrize(
+    "mode, consider_dividend_forex_tax_free, desired", example_stock_split_outputs
+)
+def test_summarize_report_example_stock_splits(
+    mode, consider_dividend_forex_tax_free, desired
+):
+    summary = get_elster_summary(
+        "example.xlsx",
+        2022,
+        mode,
+        apply_stock_splits=True,
+        consider_dividend_forex_tax_free=consider_dividend_forex_tax_free,
+    )
     assert_allclose(summary, desired)
 
 

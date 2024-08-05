@@ -189,6 +189,7 @@ def read_data_legacy(sub_dir, file_name):
             axis="columns",
             inplace=True,
         )
+        df_buy_orders["fee_currency"] = "USD"
 
         dtypes = {
             "date": None,
@@ -213,6 +214,7 @@ def read_data_legacy(sub_dir, file_name):
         df_sell_orders = pd.read_excel(
             xls, sheet_name="sales", parse_dates=["date"], dtype=dtypes
         )
+        df_sell_orders["fee_currency"] = "USD"
         df_sell_orders["comment"] = ""
 
         dtypes = {
@@ -225,16 +227,16 @@ def read_data_legacy(sub_dir, file_name):
             xls, sheet_name=forex_sheet, parse_dates=["date"], dtype=dtypes
         )
         df_currency_conversions["target_currency"] = "EUR"
-        df_currency_conversions["source_amount"] = (
-            df_currency_conversions.net_amount + df_currency_conversions.fees
-        )
-        df_currency_conversions["target_fees"] = 0
+        df_currency_conversions["source_amount"] = df_currency_conversions.net_amount
         df_currency_conversions["target_amount"] = -1
         df_currency_conversions.rename(
-            mapper={"fees": "source_fees", "currency": "source_currency"},
+            mapper={"currency": "source_currency"},
             axis="columns",
             inplace=True,
         )
+        df_currency_conversions["fee_currency"] = df_currency_conversions[
+            "source_currency"
+        ]
         df_currency_conversions.drop(
             labels=["net_amount"], axis="columns", inplace=True
         )
@@ -584,28 +586,39 @@ def apply_rates_transact_dict(trans_dict, daily_rates, monthly_rates):
     for v in trans_dict.values():
         for f in v:
             # exchange rates are in 1 EUR : X FOREX
-            buy_rate_daily = get_daily_rate(daily_rates, f.buy_date, f.currency)
-            buy_rate_monthly = get_monthly_rate(monthly_rates, f.buy_date, f.currency)
-
-            sell_rate_daily = get_daily_rate(daily_rates, f.sell_date, f.currency)
-            sell_rate_monthly = get_monthly_rate(monthly_rates, f.sell_date, f.currency)
 
             if f.buy_cost is not None:
-                f.buy_cost_eur_daily = f.buy_cost / buy_rate_daily
-                f.buy_cost_eur_monthly = f.buy_cost / buy_rate_monthly
+                f.buy_cost_eur_daily = f.buy_cost / get_daily_rate(
+                    daily_rates, f.buy_date, f.buy_cost_currency
+                )
+                f.buy_cost_eur_monthly = f.buy_cost / get_monthly_rate(
+                    monthly_rates, f.buy_date, f.buy_cost_currency
+                )
             else:
                 f.buy_cost_eur_daily = to_decimal(0.0)
                 f.buy_cost_eur_monthly = to_decimal(0.0)
-            f.buy_price_eur_daily = f.buy_price / buy_rate_daily
-            f.buy_price_eur_monthly = f.buy_price / buy_rate_monthly
+            f.buy_price_eur_daily = f.buy_price / get_daily_rate(
+                daily_rates, f.buy_date, f.currency
+            )
+            f.buy_price_eur_monthly = f.buy_price / get_monthly_rate(
+                monthly_rates, f.buy_date, f.currency
+            )
             if f.sell_cost is not None:
-                f.sell_cost_eur_daily = f.sell_cost / sell_rate_daily
-                f.sell_cost_eur_monthly = f.sell_cost / sell_rate_monthly
+                f.sell_cost_eur_daily = f.sell_cost / get_daily_rate(
+                    daily_rates, f.sell_date, f.sell_cost_currency
+                )
+                f.sell_cost_eur_monthly = f.sell_cost / get_monthly_rate(
+                    monthly_rates, f.sell_date, f.sell_cost_currency
+                )
             else:
                 f.sell_cost_eur_daily = to_decimal(0.0)
                 f.sell_cost_eur_monthly = to_decimal(0.0)
-            f.sell_price_eur_daily = f.sell_price / sell_rate_daily
-            f.sell_price_eur_monthly = f.sell_price / sell_rate_monthly
+            f.sell_price_eur_daily = f.sell_price / get_daily_rate(
+                daily_rates, f.sell_date, f.currency
+            )
+            f.sell_price_eur_monthly = f.sell_price / get_monthly_rate(
+                monthly_rates, f.sell_date, f.currency
+            )
 
             f.cost_eur_daily = f.quantity * (
                 f.buy_cost_eur_daily + f.sell_cost_eur_daily
@@ -633,7 +646,13 @@ def filter_transact_dict(trans_dict, report_year, drop_symbols):
     return filtered_dict
 
 
-def transact_dict_to_df(transact_dict, mode, consider_costs, speculative_period=None):
+def transact_dict_to_df(
+    transact_dict,
+    mode,
+    consider_costs,
+    speculative_period,
+    consider_dividend_forex_tax_free,
+):
     assert mode.lower() in ["daily", "monthly"]
     tmp = {
         "Symbol": [],
@@ -649,7 +668,7 @@ def transact_dict_to_df(transact_dict, mode, consider_costs, speculative_period=
     if consider_costs:
         tmp["Transaction Costs [EUR]"] = []
         tmp["Gain before Costs [EUR]"] = []
-    if speculative_period is not None:
+    if speculative_period is not None or consider_dividend_forex_tax_free:
         tmp["Comment"] = []
 
     for k, v in transact_dict.items():
@@ -670,9 +689,12 @@ def transact_dict_to_df(transact_dict, mode, consider_costs, speculative_period=
             tmp["Sell Price"].append(f"{f.sell_price:.2f} {f.currency}")
 
             holding_period = (f.sell_date - f.buy_date).days
-            tax_free = (speculative_period is not None) and (
+            tax_free_holding = (speculative_period is not None) and (
                 holding_period > speculative_period * 365
             )
+            tax_free_forex = consider_dividend_forex_tax_free and f.tax_free_forex
+
+            tax_free = tax_free_forex or tax_free_holding
 
             if tax_free:
                 if consider_costs:
@@ -740,10 +762,14 @@ def transact_dict_to_df(transact_dict, mode, consider_costs, speculative_period=
                             round_decimal(f.gain_eur_monthly, precision="0.01")
                         )
 
-            if speculative_period is not None:
-                if tax_free:
+            if speculative_period is not None or consider_dividend_forex_tax_free:
+                if tax_free_holding:
                     tmp["Comment"].append(
                         f"Held for {holding_period} days, no taxable gains as outside of speculative period of {speculative_period} years."
+                    )
+                elif tax_free_forex:
+                    tmp["Comment"].append(
+                        f"FOREX not acquired (e.g. received dividend payments), thus gains not taxed."
                     )
                 else:
                     tmp["Comment"].append(
