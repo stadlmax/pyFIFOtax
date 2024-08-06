@@ -29,21 +29,16 @@ The reporting tool will create FIFO queues of Foreign Currencies (i.e. not EUR) 
 
 ## Money Transfers
 The tab for money transfers allows to track withdrawals (negative deposits) and deposits
-- for withdrawals, set the amount as negative value indicating the outflow of money and indicate the date of withdrawal under `date` while being able to ignore the column `buy_date` (e.g. by setting it to a dummy date or to the same value as `date`). The fee in this case is applied to the amount before leaving the account, i.e. the withdrawn amount is the one before fees. 
-- for deposits, indicate a positive amount as inflow to your account and the date of deposit under `date`; since taxation of FOREX transactions follows a FIFO principle, too, you also have to know the initial `buy_date` (or acquisition date) of the foreign currency such that later sell transactions can be correctly valued. The fee in this case is applied to the amount after flowing into the account, i.e. the deposited amount is the one before fees.
+- for withdrawals, set the amount as negative value indicating the (net) outflow of money and indicate the date of withdrawal under `date` while being able to ignore the column `buy_date` (e.g. by setting it to a dummy date or to the same value as `date`). The withdrawn amount corresponds to the amount after applying fees and corresponds to what you would receive on the other end of this transaction.
+- for deposits, indicate a positive (gross) amount as inflow to your account and the date of deposit under `date`; since taxation of FOREX transactions follows a FIFO principle, too, you also have to know the initial `buy_date` (or acquisition date) of the foreign currency such that later sell transactions can be correctly valued. The fee is assumed to be applied separately, i.e. the fee reduces the deposited amount.
 - for deposits in EUR, `buy_date` isn't relevant and you can treat it similarly to withdrawals of any other currency (e.g. just setting it to the same value as the transaction)
 - note that in general, only the EUR balance can become negative and errors will be thrown if FOREX balances are to become negative
-- if you want to denote fees which are not tracked anywhere else, just include a row for a withdrawal of that amount and set the fee to that amount
+- if you want to denote fees which are not tracked anywhere else, just include a row for a withdrawal of 0 and set the fee to the amount of the fee.
 
 You can generate a list of withdrawals including the relevant `buy_date` information for use in other accounts. Note that these values are the net values after applying potential withdrawal fees.
 
 ## Currency Conversions
-The tab for currency conversions allows to track conversions between different currencies by specifying the source and target amount incl. potential fees on both sides. 
-- source fees lower the amount to be exchanged, i.e. the source amount to be specified is the one before fees
-- target fees lower the amount to be received, i.e. the target amount to be specified is also the one before fees
-- i.e. internally, (source_amount - source_fees) is exchanged, and you actually receive (target_amount - target_fees) 
-- if you exchange from EUR to FOREX or from FOREX to EUR, you can leave the corresponding EUR amount as "-1" and indicate that you don't care about the exact exchange rate. The resulting EUR balance then can be slightly incorrect, but as this balance is allowed to become negative, you shouldn't experience any resulting issues from doing so. In terms of taxation, currency exchanges are handled by the official ECB rates anyways, so the exact rate doesn't matter. This mode can be handy if you only want to receive useful inputs for your tax declaration but don't care about an exact EUR balance.
-- when exchanging between two different FOREX, you will have to specify both amount explicitly
+The tab for currency conversions allows to track conversions between different currencies by specifying the source and target amount incl. potential fees. If you exchange from EUR to FOREX or from FOREX to EUR, you can leave the corresponding EUR amount as "-1" and indicate that you don't care about the exact exchange rate. The resulting EUR balance then can be slightly incorrect, but as this balance is allowed to become negative, you shouldn't experience any resulting issues from doing so. In terms of taxation, currency exchanges are handled by the official ECB rates anyways, so the exact rate doesn't matter. This mode can be handy if you only want to receive useful inputs for your tax declaration but don't care about an exact EUR balance. When exchanging between two different FOREX, you will have to specify both amount explicitly.
 
 
 # Known Limitations
