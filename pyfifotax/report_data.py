@@ -360,9 +360,7 @@ class ReportData:
                 if event.amount > 0:
                     new_forex = FIFOForex(
                         currency=event.currency,
-                        quantity=(
-                            event.amount if event.fees is not None else event.amount
-                        ),
+                        quantity=event.amount,
                         buy_date=event.buy_date,
                         source=f"Deposit of Money",
                     )
