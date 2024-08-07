@@ -511,15 +511,19 @@ def write_report_awv(df_z4, df_z10, sub_dir, file_name):
     if df_z4.empty and df_z10.empty:
         return
 
-    df_z4.sort_values("Meldezeitraum", inplace=True)
-    df_z10.sort_values("Meldezeitraum", inplace=True)
+    if not df_z4.empty:
+        df_z4.sort_values("Meldezeitraum", inplace=True)
+    if not df_z10.empty:
+        df_z10.sort_values("Meldezeitraum", inplace=True)
 
     report_path = os.path.join(sub_dir, file_name)
     with pd.ExcelWriter(
         report_path, engine="xlsxwriter", datetime_format="yyyy-mm-dd"
     ) as writer:
-        create_report_sheet("Z4", df_z4, writer)
-        create_report_sheet("Z10", df_z10, writer)
+        if not df_z4.empty:
+            create_report_sheet("Z4", df_z4, writer)
+        if not df_z10.empty:
+            create_report_sheet("Z10", df_z10, writer)
 
 
 def apply_rates_forex_dict(forex_dict, daily_rates, monthly_rates):
@@ -651,7 +655,7 @@ def transact_dict_to_df(
     mode,
     consider_costs,
     speculative_period,
-    consider_dividend_forex_tax_free,
+    consider_tax_free_forex,
 ):
     assert mode.lower() in ["daily", "monthly"]
     tmp = {
@@ -668,7 +672,7 @@ def transact_dict_to_df(
     if consider_costs:
         tmp["Transaction Costs [EUR]"] = []
         tmp["Gain before Costs [EUR]"] = []
-    if speculative_period is not None or consider_dividend_forex_tax_free:
+    if speculative_period is not None or consider_tax_free_forex:
         tmp["Comment"] = []
 
     for k, v in transact_dict.items():
@@ -692,7 +696,7 @@ def transact_dict_to_df(
             tax_free_holding = (speculative_period is not None) and (
                 holding_period > speculative_period * 365
             )
-            tax_free_forex = consider_dividend_forex_tax_free and f.tax_free_forex
+            tax_free_forex = consider_tax_free_forex and f.tax_free_forex
 
             tax_free = tax_free_forex or tax_free_holding
 
@@ -762,7 +766,7 @@ def transact_dict_to_df(
                             round_decimal(f.gain_eur_monthly, precision="0.01")
                         )
 
-            if speculative_period is not None or consider_dividend_forex_tax_free:
+            if speculative_period is not None or consider_tax_free_forex:
                 if tax_free_holding:
                     tmp["Comment"].append(
                         f"Held for {holding_period} days, no taxable gains as outside of speculative period of {speculative_period} years."

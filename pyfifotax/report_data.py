@@ -15,6 +15,7 @@ from pyfifotax.data_structures_event import (
     MoneyWithdrawalEvent,
     MoneyTransferEvent,
     DividendEvent,
+    TaxEvent,
     StockSplitEvent,
 )
 
@@ -200,6 +201,7 @@ class ReportData:
         # first, just create all events from raw data
         self.report_events.extend(RSUEvent.from_report(raw_data.rsu))
         self.report_events.extend(DividendEvent.from_report(raw_data.dividends))
+        self.report_events.extend(TaxEvent.from_report(raw_data.dividends))
         self.report_events.extend(BuyEvent.from_report(raw_data.buy_orders))
         self.report_events.extend(SellEvent.from_report(raw_data.sell_orders))
         self.report_events.extend(
@@ -251,7 +253,7 @@ class ReportData:
                     symbol=event.symbol,
                     currency=event.received_shares.currency,
                     quantity=event.withheld_shares.quantity,
-                    value=event.received_shares.total_buy_value(),
+                    value=event.withheld_shares.total_buy_value(),
                 )
                 self.awv_z4_events.append(bonus)
                 self.awv_z10_events.append(bought_shares)
@@ -280,18 +282,28 @@ class ReportData:
                 self.awv_z10_events.append(bought_shares)
 
             elif isinstance(event, DividendEvent):
-                if event.received_net_dividend.quantity > 0.0:
-                    self.held_forex[event.currency].push(event.received_net_dividend)
-                elif event.received_net_dividend.quantity < 0.0:
-                    self.held_forex[event.currency].pop(
-                        -event.received_net_dividend.quantity, to_decimal(1), event.date
+                if event.received_dividend is not None:
+                    div = FIFOForex(
+                        event.currency,
+                        event.received_dividend.amount,
+                        event.date,
+                        source=event.received_dividend.comment,
+                        tax_free_forex=True,
                     )
-
-                if event.withheld_tax is not None:
-                    self.misc["Tax Withholding"].append(event.withheld_tax)
-                self.misc["Dividend Payments"].append(event.received_dividend)
+                    self.held_forex[event.currency].push(div)
+                    self.misc["Dividend Payments"].append(event.received_dividend)
 
                 # dividends should be small enough to not trigger AWV reportings
+
+            elif isinstance(event, TaxEvent):
+                if event.withheld_tax is not None:
+                    self.held_forex[event.currency].pop(
+                        event.withheld_tax.amount, to_decimal(1), event.date
+                    )
+                    self.misc["Tax Withholding"].append(event.withheld_tax)
+
+                if event.reverted_tax is not None:
+                    self.held_forex[event.currency].push(event.reverted_tax)
 
             elif isinstance(event, BuyEvent):
                 # if not enough money, pop on FOREX Queue will fail
@@ -439,9 +451,7 @@ class ReportData:
             self.monthly_rates,
         )
 
-    def consolidate_report(
-        self, report_year, mode, consider_dividend_forex_tax_free=True
-    ):
+    def consolidate_report(self, report_year, mode, consider_tax_free_forex=True):
         if mode.lower() not in ["daily", "monthly"]:
             raise ValueError(
                 f"Expected exchange rate mode to be in (daily, monthly), got {mode}."
@@ -469,14 +479,14 @@ class ReportData:
             mode,
             consider_costs=True,
             speculative_period=None,
-            consider_dividend_forex_tax_free=False,
+            consider_tax_free_forex=False,
         )
         df_forex = transact_dict_to_df(
             filtered_sold_forex,
             mode,
             consider_costs=False,
             speculative_period=1,
-            consider_dividend_forex_tax_free=consider_dividend_forex_tax_free,
+            consider_tax_free_forex=consider_tax_free_forex,
         )
         df_forex = df_forex.drop(["Buy Price", "Sell Price"], axis="columns")
 
@@ -545,11 +555,9 @@ class ReportData:
         report_year,
         mode,
         report_file_name,
-        consider_dividend_forex_tax_free=True,
+        consider_tax_free_forex=True,
     ):
-        dfs = self.consolidate_report(
-            report_year, mode, consider_dividend_forex_tax_free
-        )
+        dfs = self.consolidate_report(report_year, mode, consider_tax_free_forex)
         write_report(
             *dfs,
             self.sub_dir,
@@ -581,7 +589,7 @@ class ReportData:
             create_report_sheet("withdrawals", df, writer)
 
     def create_all_reports(
-        self, awv_threshold_eur=12_500, consider_dividend_forex_tax_free=True
+        self, awv_threshold_eur=12_500, consider_tax_free_forex=True
     ):
         report_years = self.report_years
         self.create_withdrawal_report()
@@ -593,8 +601,8 @@ class ReportData:
             daily_file_name = f"tax_report_{year}_daily_rates.xlsx"
             monthly_file_name = f"tax_report_{year}_monthly_rates.xlsx"
             self.create_excel_report(
-                year, "daily", daily_file_name, consider_dividend_forex_tax_free
+                year, "daily", daily_file_name, consider_tax_free_forex
             )
             self.create_excel_report(
-                year, "monthly", monthly_file_name, consider_dividend_forex_tax_free
+                year, "monthly", monthly_file_name, consider_tax_free_forex
             )

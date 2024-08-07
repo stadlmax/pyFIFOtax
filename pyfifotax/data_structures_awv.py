@@ -148,7 +148,7 @@ class AWVEntryZ10RSUDeposit(AWVEntryZ10):
         value: decimal.Decimal,
         currency: str,
     ):
-        is_nvidia = "NVDA" in symbol
+        is_nvidia = "NVDA" in symbol or "US67066G1040" in symbol
         super().__init__(
             date=date,
             comment=(
@@ -173,7 +173,7 @@ class AWVEntryZ10RSUTaxWithholding(AWVEntryZ10):
         value: decimal.Decimal,
         currency: str,
     ):
-        is_nvidia = "NVDA" in symbol
+        is_nvidia = "NVDA" in symbol or "US67066G1040" in symbol
         super().__init__(
             date=date,
             comment=(
@@ -198,7 +198,7 @@ class AWVEntryZ10Sale(AWVEntryZ10):
         value: decimal.Decimal,
         currency: str,
     ):
-        is_nvidia = "NVDA" in symbol
+        is_nvidia = "NVDA" in symbol or "US67066G1040" in symbol
         super().__init__(
             date=date,
             comment=(
@@ -223,7 +223,7 @@ class AWVEntryZ10Buy(AWVEntryZ10):
         value: decimal.Decimal,
         currency: str,
     ):
-        is_nvidia = "NVDA" in symbol
+        is_nvidia = "NVDA" in symbol or "US67066G1040" in symbol
         super().__init__(
             date=date,
             comment=(
@@ -248,7 +248,7 @@ class AWVEntryZ10ESPPDeposit(AWVEntryZ10):
         value: decimal.Decimal,
         currency: str,
     ):
-        is_nvidia = "NVDA" in symbol
+        is_nvidia = "NVDA" in symbol or "US67066G1040" in symbol
         super().__init__(
             date=date,
             comment=(
@@ -268,7 +268,7 @@ class AWVEntryZ4ESPPBonus(AWVEntryZ4):
     def __init__(
         self, date: datetime.date, symbol: str, value: decimal.Decimal, currency: str
     ):
-        is_nvidia = "NVDA" in symbol
+        is_nvidia = "NVDA" in symbol or "US67066G1040" in symbol
         super().__init__(
             date=date,
             purpose=(
@@ -287,7 +287,7 @@ class AWVEntryZ4RSUBonus(AWVEntryZ4):
     def __init__(
         self, date: datetime.date, symbol: str, value: decimal.Decimal, currency: str
     ):
-        is_nvidia = "NVDA" in symbol
+        is_nvidia = "NVDA" in symbol or "US67066G1040" in symbol
         super().__init__(
             date=date,
             purpose=(
