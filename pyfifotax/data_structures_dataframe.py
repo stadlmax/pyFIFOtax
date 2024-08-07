@@ -261,6 +261,51 @@ class TaxWithholdingRow(DataFrameRow):
             datetime.date(1, 1, 1), "", np.float64(0), ""
         ).to_dict()
 
+    def to_dividend_row(self) -> DividendRow:
+        return DividendRow(
+            self.date,
+            self.symbol,
+            np.float64(0),
+            self.amount,
+            self.currency,
+            f"Tax Withholding ({self.symbol})",
+        )
+
+
+@dataclass
+class TaxReversalRow(DataFrameRow):
+    date: datetime.date
+    symbol: str
+    amount: np.float64
+    currency: str
+
+    @staticmethod
+    def from_schwab_json(json_dict: dict) -> TaxReversalRow:
+        date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
+        symbol = json_dict["Symbol"]
+        amount = pd.to_numeric(json_dict["Amount"].strip("-$").replace(",", ""))
+
+        return TaxReversalRow(
+            date,
+            symbol,
+            amount,
+            "USD",
+        )
+
+    @staticmethod
+    def default_dict() -> dict:
+        return TaxReversalRow(datetime.date(1, 1, 1), "", np.float64(0), "").to_dict()
+
+    def to_dividend_row(self) -> DividendRow:
+        return DividendRow(
+            self.date,
+            self.symbol,
+            np.float64(0),
+            -self.amount,
+            self.currency,
+            f"Tax Reversal ({self.symbol})",
+        )
+
 
 @dataclass
 class SellOrderRow(DataFrameRow):

@@ -24,17 +24,19 @@ from pyfifotax.utils import to_decimal, round_decimal, get_daily_rate
 
 
 class EventPriority(Enum):
+    EMPTY: int = 0
     ESPP: int = 0
     RSU: int = 0
     DIVIDEND: int = 1
-    MONEY_DEPOSIT: int = 1
-    CURRENCY_CONVERSION_FROM_EUR_TO_FOREX = 2
-    SELL: int = 3
-    CURRENCY_CONVERSION_FROM_FOREX_TO_FOREX = 4
-    BUY: int = 5
-    CURRENCY_CONVERSION_FROM_FOREX_TO_EUR = 6
-    MONEY_WITHDRAWAL: int = 7
-    STOCK_SPLIT: int = 8  # at the end as assumed after market-close
+    TAX: int = 2
+    MONEY_DEPOSIT: int = 3
+    CURRENCY_CONVERSION_FROM_EUR_TO_FOREX = 4
+    SELL: int = 5
+    CURRENCY_CONVERSION_FROM_FOREX_TO_FOREX = 6
+    BUY: int = 7
+    CURRENCY_CONVERSION_FROM_FOREX_TO_EUR = 8
+    MONEY_WITHDRAWAL: int = 9
+    STOCK_SPLIT: int = 10  # at the end as assumed after market-close
 
 
 class ReportEvent:
@@ -102,49 +104,83 @@ class DividendEvent(ReportEvent):
         self,
         date: datetime.date,
         currency: str,
-        received_dividend: Forex,
-        received_net_dividend: FIFOForex,
-        withheld_tax: Optional[Forex],
+        received_dividend: Optional[Forex],
     ):
         super().__init__(date, EventPriority.DIVIDEND)
         self.currency = currency
         self.received_dividend = received_dividend
-        self.received_net_dividend = received_net_dividend
-        self.withheld_tax = withheld_tax
 
     @staticmethod
     def from_df_row(df_row: Series, **kwargs) -> DividendEvent:
         row = DividendRow.from_df_row(df_row)
         gross_amount = to_decimal(row.amount)
-        tax_amount = to_decimal(row.tax_withholding)
-        net_amount = gross_amount - tax_amount
 
-        # TODO eventually add back check for tax_amount
-        # dividends can be negative in negative-interest-rate times
-
-        div = Forex(
-            currency=row.currency,
-            date=row.date,
-            amount=gross_amount,
-            comment=f"Dividend Payment ({row.symbol})",
-        )
-        net_div = FIFOForex(
-            currency=row.currency,
-            buy_date=row.date,
-            quantity=net_amount,
-            source=f"Received Net Dividend Payment ({row.symbol})",
-            tax_free_forex=True,
-        )
-        if tax_amount > to_decimal(0.0):
-            tax = Forex(
+        if gross_amount > 0:
+            div = Forex(
                 currency=row.currency,
                 date=row.date,
-                amount=tax_amount,
-                comment=f"Withheld Tax on Dividends ({row.symbol})",
+                amount=gross_amount,
+                comment=f"Dividend Payment ({row.symbol})",
             )
-        else:
-            tax = None
-        return DividendEvent(row.date, row.currency, div, net_div, tax)
+            return DividendEvent(row.date, row.currency, div)
+
+        return DividendEvent(row.date, row.currency, None)
+
+
+class TaxEvent(ReportEvent):
+    def __init__(
+        self,
+        date: datetime.date,
+        currency: str,
+        withheld_tax: Optional[Forex],
+        reverted_tax: Optional[FIFOForex],
+    ):
+        super().__init__(date, EventPriority.TAX)
+        self.currency = currency
+        self.withheld_tax = withheld_tax
+        self.reverted_tax = reverted_tax
+
+    @staticmethod
+    def from_df_row(df_row: Series, **kwargs) -> TaxEvent:
+        row = DividendRow.from_df_row(df_row)
+        withheld_tax = to_decimal(row.tax_withholding)
+        if withheld_tax > 0:
+            withheld_tax = Forex(
+                currency=row.currency,
+                date=row.date,
+                amount=withheld_tax,
+                comment=f"Tax Withholding ({row.symbol})",
+            )
+
+            return TaxEvent(
+                row.date,
+                row.currency,
+                withheld_tax,
+                None,
+            )
+
+        elif withheld_tax < 0:
+            reverted_tax = FIFOForex(
+                currency=row.currency,
+                buy_date=row.date,
+                quantity=-withheld_tax,
+                source=f"Tax Reversal ({row.symbol})",
+                tax_free_forex=True,
+            )
+
+            return TaxEvent(
+                row.date,
+                row.currency,
+                None,
+                reverted_tax,
+            )
+
+        return TaxEvent(
+            row.date,
+            row.currency,
+            None,
+            None,
+        )
 
 
 class ESPPEvent(ReportEvent):

@@ -1,6 +1,4 @@
-import os
 import pandas as pd
-import warnings
 import json
 import argparse
 
@@ -14,6 +12,7 @@ from pyfifotax.data_structures_dataframe import (
     TaxWithholdingRow,
     CurrencyConversionRow,
     MoneyTransferRow,
+    TaxReversalRow,
 )
 
 
@@ -86,14 +85,7 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
 
             elif e["Action"] == "Dividend" and e["Description"] == "Credit":
                 tmp = DividendRow.from_schwab_json(e)
-                if len(schwab_dividend_events) > 0 and isinstance(
-                    schwab_dividend_events[-1], TaxWithholdingRow
-                ):
-                    tax = schwab_dividend_events.pop(-1)
-                    tmp.tax_withholding = tax.amount
-                    schwab_dividend_events.append(tmp.to_dict())
-                else:
-                    schwab_dividend_events.append(tmp)
+                schwab_dividend_events.append(tmp)
 
             elif e["Action"] == "Sale" and e["Description"] == "Share Sale":
                 schwab_sell_events.append(SellOrderRow.from_schwab_json(e).to_dict())
@@ -114,14 +106,11 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
 
             elif e["Action"] == "Tax Withholding" and e["Description"] == "Debit":
                 tmp = TaxWithholdingRow.from_schwab_json(e)
-                if len(schwab_dividend_events) > 0 and isinstance(
-                    schwab_dividend_events[-1], DividendRow
-                ):
-                    div = schwab_dividend_events.pop(-1)
-                    div.tax_withholding = tmp.amount
-                    schwab_dividend_events.append(div.to_dict())
-                else:
-                    schwab_dividend_events.append(tmp)
+                schwab_dividend_events.append(tmp.to_dividend_row())
+
+            elif e["Action"] == "Tax Reversal" and e["Description"] == "Credit":
+                tmp = TaxReversalRow.from_schwab_json(e)
+                schwab_dividend_events.append(tmp.to_dividend_row())
 
             else:
                 # do nothing on unused fields
