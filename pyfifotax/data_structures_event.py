@@ -115,7 +115,7 @@ class DividendEvent(ReportEvent):
         row = DividendRow.from_df_row(df_row)
         gross_amount = to_decimal(row.amount)
 
-        if gross_amount > 0:
+        if gross_amount != to_decimal(0):
             div = Forex(
                 currency=row.currency,
                 date=row.date,
@@ -411,6 +411,8 @@ class CurrencyConversionEvent(ReportEvent):
                 target_amount = to_decimal(row.source_amount) / get_daily_rate(
                     daily_rates, row.date, row.source_currency
                 )
+            else:
+                target_amount = to_decimal(row.target_amount)
 
             return CurrencyConversionEvent(
                 row.date,

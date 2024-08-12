@@ -1,5 +1,4 @@
 import decimal
-import pandas as pd
 import warnings
 
 import datetime
