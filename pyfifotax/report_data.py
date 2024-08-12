@@ -283,15 +283,23 @@ class ReportData:
 
             elif isinstance(event, DividendEvent):
                 if event.received_dividend is not None:
-                    div = FIFOForex(
-                        event.currency,
-                        event.received_dividend.amount,
-                        event.date,
-                        source=event.received_dividend.comment,
-                        tax_free_forex=True,
-                    )
-                    self.held_forex[event.currency].push(div)
-                    self.misc["Dividend Payments"].append(event.received_dividend)
+                    if event.received_dividend.amount > 0:
+                        div = FIFOForex(
+                            event.currency,
+                            event.received_dividend.amount,
+                            event.date,
+                            source=event.received_dividend.comment,
+                            tax_free_forex=True,
+                        )
+                        self.held_forex[event.currency].push(div)
+                        self.misc["Dividend Payments"].append(event.received_dividend)
+                    else:
+                        self.held_forex[event.currency].pop(
+                            -event.received_dividend,
+                            to_decimal(1),
+                            event.date,
+                        )
+                        self.misc["Dividend Payments"].append(event.received_dividend)
 
                 # dividends should be small enough to not trigger AWV reportings
 
