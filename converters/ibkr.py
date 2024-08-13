@@ -1,5 +1,4 @@
 import re
-import sys
 from datetime import date
 
 from .csv_converter import CSVConverter
