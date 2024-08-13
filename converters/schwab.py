@@ -1,7 +1,7 @@
-import pandas as pd
 import json
 
-from pyfifotax.utils import create_report_sheet
+import pandas as pd
+
 from pyfifotax.data_structures_dataframe import (
     BuyOrderRow,
     SellOrderRow,
@@ -13,6 +13,7 @@ from pyfifotax.data_structures_dataframe import (
     MoneyTransferRow,
     TaxReversalRow,
 )
+from pyfifotax.utils import create_report_sheet
 
 
 def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchange):

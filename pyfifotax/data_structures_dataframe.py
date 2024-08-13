@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass, asdict
-import pandas as pd
-import numpy as np
-from pandas.core.series import Series
-
 from typing import Optional
+
+import numpy as np
+import pandas as pd
+from pandas.core.series import Series
 
 from pyfifotax.historic_price_utils import is_price_historic
 
