@@ -1,13 +1,15 @@
-import os
 import datetime
 import decimal
-import logging
-import pandas as pd
 import hashlib
 import logging
+import os
 import time
-import yfinance as yf
 from pathlib import Path
+
+import pandas as pd
+import requests_cache
+import yfinance as yf
+
 logger = logging.getLogger("pyfifotax")
 
 def get_reverse_splits(splits: pd.Series):

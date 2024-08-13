@@ -1,7 +1,8 @@
-import os
 import datetime
-import pandas as pd
 import logging
+import os
+
+import pandas as pd
 
 import pyfifotax.data_structures_awv as awv
 from pyfifotax.data_structures_event import (
@@ -18,12 +19,12 @@ from pyfifotax.data_structures_event import (
     TaxEvent,
     StockSplitEvent,
 )
-
 from pyfifotax.data_structures_fifo import (
     Forex,
     FIFOForex,
     FIFOQueue,
 )
+from pyfifotax.historic_price_utils import get_splits_for_symbol
 from pyfifotax.utils import apply_rates_forex_dict, filter_forex_dict, forex_dict_to_df
 from pyfifotax.utils import (
     apply_rates_transact_dict,
@@ -37,7 +38,6 @@ from pyfifotax.utils import (
     create_report_sheet,
 )
 from pyfifotax.utils import to_decimal
-from pyfifotax.historic_price_utils import get_splits_for_symbol
 
 logger = logging.getLogger("pyfifotax")
 
