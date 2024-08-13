@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import decimal
 import datetime
+import decimal
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
@@ -9,7 +9,6 @@ from typing import Optional
 import pandas as pd
 from pandas.core.series import Series
 
-from pyfifotax.data_structures_fifo import FIFOForex, FIFOShare, Forex
 from pyfifotax.data_structures_dataframe import (
     ESPPRow,
     RSURow,
@@ -20,6 +19,7 @@ from pyfifotax.data_structures_dataframe import (
     MoneyTransferRow,
     StockSplitRow,
 )
+from pyfifotax.data_structures_fifo import FIFOForex, FIFOShare, Forex
 from pyfifotax.utils import to_decimal, round_decimal, get_daily_rate
 
 

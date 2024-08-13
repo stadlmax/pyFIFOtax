@@ -1,11 +1,12 @@
-import math
-import decimal
 import datetime
-from typing import Optional
+import decimal
 import logging
-logger = logging.getLogger("pyfifotax")
+import math
+from typing import Optional
 
 from pyfifotax.utils import to_decimal
+
+logger = logging.getLogger("pyfifotax")
 
 
 # base class for handling currency-valued items

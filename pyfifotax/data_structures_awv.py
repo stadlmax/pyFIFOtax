@@ -1,7 +1,6 @@
+import datetime
 import decimal
 import logging
-
-import datetime
 
 from pyfifotax.utils import to_decimal, round_decimal, get_daily_rate
 

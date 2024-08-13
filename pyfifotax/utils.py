@@ -1,16 +1,16 @@
-import os
-import io
 import datetime
-import requests
-import zipfile
 import decimal
-from dataclasses import dataclass
-from typing import Optional, Union
-import pandas as pd
-import numpy as np
-from pathlib import Path
+import io
 import logging
+import os
+import zipfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional, Union
 
+import numpy as np
+import pandas as pd
+import requests
 
 from pyfifotax.data_structures_dataframe import (
     ESPPRow,
