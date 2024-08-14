@@ -164,6 +164,11 @@ def test_summarize_exception_legacy(file_name, error_msg):
         get_elster_summary(file_name, 2022, "daily")
 
 
+def test_negative_dividend():
+    summary = get_elster_summary("negative_dividend.xlsx", 2018, "monthly")
+    assert_allclose(summary, [43.54, 0, 0, 43.54, 0, 0])
+
+
 def test_empty():
     try:
         get_elster_summary("example_empty.xlsx", 2022, "daily")

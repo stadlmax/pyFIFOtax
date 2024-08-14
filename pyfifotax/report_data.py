@@ -20,6 +20,7 @@ from pyfifotax.data_structures_event import (
 )
 
 from pyfifotax.data_structures_fifo import (
+    Forex,
     FIFOForex,
     FIFOQueue,
 )
@@ -295,7 +296,7 @@ class ReportData:
                         self.misc["Dividend Payments"].append(event.received_dividend)
                     else:
                         self.held_forex[event.currency].pop(
-                            -event.received_dividend,
+                            -event.received_dividend.amount,
                             to_decimal(1),
                             event.date,
                         )
@@ -312,6 +313,13 @@ class ReportData:
 
                 if event.reverted_tax is not None:
                     self.held_forex[event.currency].push(event.reverted_tax)
+                    tmp = Forex(
+                        currency=event.reverted_tax.currency,
+                        date=event.reverted_tax.buy_date,
+                        amount=-event.reverted_tax.quantity,
+                        comment=event.reverted_tax.source,
+                    )
+                    self.misc["Tax Withholding"].append(tmp)
 
             elif isinstance(event, BuyEvent):
                 # if not enough money, pop on FOREX Queue will fail
