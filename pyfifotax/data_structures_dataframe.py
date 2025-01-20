@@ -8,6 +8,8 @@ from pandas.core.series import Series
 
 from typing import Optional
 
+from pyfifotax.historic_price_utils import is_price_historic
+
 
 @dataclass
 class DataFrameRow:
@@ -59,6 +61,23 @@ class ESPPRow(DataFrameRow):
         fair_market_value = pd.to_numeric(
             details["PurchaseFairMarketValue"].strip("$").replace(",", "")
         )
+
+        # ESPP typically evaluated at close
+        is_historic, hist_price = is_price_historic(
+            buy_price, symbol, date, kind="Close"
+        )
+        if is_historic:
+            split_msg = ": Found no need to adjust values for stock splits, check if this is indeed the case"
+
+        else:
+            # TODO: look into supporting arbitary splits
+            # assumptions for now: if adjusted: price < hist_price and integer
+            split_factor = int(hist_price / buy_price)
+            buy_price = buy_price * split_factor
+            fair_market_value = fair_market_value * split_factor
+            quantity = quantity * split_factor
+            split_msg = f": adjusted values for stock splits with an assumed split-factor of {split_factor}"
+
         return ESPPRow(
             date,
             symbol,
@@ -66,7 +85,7 @@ class ESPPRow(DataFrameRow):
             fair_market_value,
             quantity,
             "USD",
-            "Automated Schwab Import (JSON)",
+            "Automated Schwab Import (JSON)" + split_msg,
         )
 
     @staticmethod
@@ -123,6 +142,22 @@ class RSURow(DataFrameRow):
 
         award_id = details["AwardId"]
 
+        # RSU typically evaluated at close
+        is_historic, hist_price = is_price_historic(
+            fair_market_value, symbol, date, kind="Close"
+        )
+        if is_historic:
+            split_msg = ": Found no need to adjust values for stock splits, check if this is indeed the case"
+
+        else:
+            # TODO: look into supporting arbitary splits
+            # assumptions for now: if adjusted: price < hist_price and integer
+            split_factor = int(hist_price / fair_market_value)
+            fair_market_value = fair_market_value * split_factor
+            net_quantity = net_quantity * split_factor
+            gross_quantity = gross_quantity * split_factor
+            split_msg = f": adjusted values for stock splits with an assumed split-factor of {split_factor}"
+
         return (
             RSURow(
                 date,
@@ -131,7 +166,7 @@ class RSURow(DataFrameRow):
                 net_quantity,
                 fair_market_value,
                 "USD",
-                f"Automated Schwab Import (JSON, Award ID {award_id})",
+                f"Automated Schwab Import (JSON, Award ID {award_id})" + split_msg,
             ),
             award_id,
         )
@@ -155,6 +190,21 @@ class RSURow(DataFrameRow):
 
         award_id = details["AwardId"]
 
+        # RSU typically evaluated at close
+        is_historic, hist_price = is_price_historic(
+            fair_market_value, symbol, date, kind="Close"
+        )
+        if is_historic:
+            split_msg = ": Found no need to adjust values for stock splits, check if this is indeed the case"
+
+        else:
+            # TODO: look into supporting arbitary splits
+            # assumptions for now: if adjusted: price < hist_price and integer
+            split_factor = int(hist_price / fair_market_value)
+            fair_market_value = fair_market_value * split_factor
+            net_quantity = net_quantity * split_factor
+            split_msg = f": adjusted values for stock splits with an assumed split-factor of {split_factor}"
+
         return (
             RSURow(
                 date,
@@ -163,7 +213,7 @@ class RSURow(DataFrameRow):
                 net_quantity,
                 fair_market_value,
                 "USD",
-                f"Automated Schwab Import (JSON, Award ID {award_id})",
+                f"Automated Schwab Import (JSON, Award ID {award_id})" + split_msg,
             ),
             award_id,
         )
@@ -344,6 +394,9 @@ class SellOrderRow(DataFrameRow):
             )
 
         sale_price = pd.to_numeric(sale_price.strip("$").replace(",", ""))
+
+        # sell-orders typically should always be denoted in historical values
+        # TODO: check if this is the case and potentially fix
 
         return SellOrderRow(
             date,

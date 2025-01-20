@@ -73,7 +73,7 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
                 tmp, award_id = RSURow.from_schwab_lapse_json(e)
                 key = (tmp.date.year, tmp.date.month, award_id)
                 if key in schwab_rsu_lapse_events:
-                    raise RuntimeError("Found duplicated RSU Lapse event: {tmp}")
+                    raise RuntimeError(f"Found duplicated RSU Lapse event: {tmp}")
                 schwab_rsu_lapse_events[key] = tmp
 
             elif e["Action"] == "Deposit" and e["Description"] == "RS":
@@ -128,13 +128,7 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
                 raise ValueError(
                     f"RSU Deposit {key} does not have a matching Lapse Event"
                 )
-            # schwab applies splits on historical lapse data but not on deposits
-            # thus, use this difference to determine split factor on-the-fly
-            # based on the split factor, we then can rely on the gross quantity
-            # in the lapse event while the prices for the deposit event are already
-            # correct
-            split_factor = rsu_lapse.net_quantity / rsu.net_quantity
-            rsu.gross_quantity = rsu_lapse.gross_quantity / split_factor
+            rsu.gross_quantity = rsu_lapse.gross_quantity
             schwab_rsu_events.append(rsu)
 
     if len(schwab_espp_events) == 0:

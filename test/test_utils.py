@@ -41,7 +41,7 @@ order_file_names_legacy = [
 def test_summarize_report_order(file_name):
     with pytest.deprecated_call():
         summary = get_elster_summary(file_name, 2022, "daily")
-        assert_allclose(summary, [-297.27, 48.35, 347.51, 0.29, 0, 0])
+        assert_allclose(summary, [-297.27, 48.35, 347.51, 0.29, 0, 0, 0, 0])
 
 
 example_outputs = [
@@ -52,10 +52,26 @@ example_outputs = [
     # slight change again as popping fees changes forex gains
     # >>> ("daily", [914.14, 974.81, 247.07, 27.96, 29.80, 66.64]),
     # >>> ("monthly", [829.22, 932.71, 294.16, 28.60, 29.44, 15.89]),
-    ("daily", False, [914.14, 974.81, 247.07, 27.96, 29.80, 69.70]),
-    ("monthly", False, [829.22, 932.71, 294.16, 28.60, 29.44, 18.24]),
-    ("daily", True, [914.14, 974.81, 247.07, 27.96, 29.80, 50.04]),
-    ("monthly", True, [829.22, 932.71, 294.16, 28.60, 29.44, 5.37]),
+    (
+        "daily",
+        False,
+        [914.14, 974.81, 247.07, 27.96, 29.80, 69.70, 10296.5, 10226.78],
+    ),
+    (
+        "monthly",
+        False,
+        [829.22, 932.71, 294.16, 28.60, 29.44, 18.24, 10170.24, 10152.0],
+    ),
+    (
+        "daily",
+        True,
+        [914.14, 974.81, 247.07, 27.96, 29.80, 50.04, 10090.44, 10040.38],
+    ),
+    (
+        "monthly",
+        True,
+        [829.22, 932.71, 294.16, 28.60, 29.44, 5.37, 9966.70, 9961.33],
+    ),
 ]
 
 
@@ -91,10 +107,26 @@ example_stock_split_outputs = [
     # ("daily", [6728.47, 6691.13, 149.06, 27.96, 29.8, 66.64]),
     # ("monthly", [6650.83, 6640.05, 179.89, 28.6, 29.44, 15.89]),
     # slight change again as popping fees changes forex gains
-    ("daily", False, [6728.47, 6691.13, 149.06, 27.96, 29.8, 69.70]),
-    ("monthly", False, [6650.83, 6640.05, 179.89, 28.6, 29.44, 18.24]),
-    ("daily", True, [6728.47, 6691.13, 149.06, 27.96, 29.8, 50.04]),
-    ("monthly", True, [6650.83, 6640.05, 179.89, 28.6, 29.44, 5.37]),
+    (
+        "daily",
+        False,
+        [6728.47, 6691.13, 149.06, 27.96, 29.8, 69.70, 10296.5, 10226.78],
+    ),
+    (
+        "monthly",
+        False,
+        [6650.83, 6640.05, 179.89, 28.6, 29.44, 18.24, 10170.24, 10152.0],
+    ),
+    (
+        "daily",
+        True,
+        [6728.47, 6691.13, 149.06, 27.96, 29.8, 50.04, 10090.44, 10040.38],
+    ),
+    (
+        "monthly",
+        True,
+        [6650.83, 6640.05, 179.89, 28.6, 29.44, 5.37, 9966.70, 9961.33],
+    ),
 ]
 
 
@@ -123,13 +155,13 @@ def test_example_partial(file_name):
     for year in range(2019, 2024 + 1):
         for mode in ("daily", "monthly"):
             summary = get_elster_summary(file_name, year, mode)
-            assert_allclose(summary, [0, 0, 0, 0, 0, 0])
+            assert_allclose(summary, [0, 0, 0, 0, 0, 0, 0, 0])
 
 
 def test_summarize_forex_simple_legacy():
     with pytest.deprecated_call():
         summary = get_elster_summary("forex_simple_legacy.xlsx", 2022, "daily")
-        assert_allclose(summary, [-1, 0, 1, 0, 15, 0])
+        assert_allclose(summary, [-1, 0, 1, 0, 15, 0, 3002.8, 3002.8])
 
 
 def test_summarize_forex_next_exchange_date_legacy():
@@ -138,7 +170,7 @@ def test_summarize_forex_next_exchange_date_legacy():
         summary = get_elster_summary(
             "forex_next_exchange_date_legacy.xlsx", 2022, "daily"
         )
-        assert_allclose(summary, [0, 0, 0, 0, 0, 0])
+        assert_allclose(summary, [0, 0, 0, 0, 0, 0, 97.69, 97.69])
 
 
 exception_outputs_legacy = [
@@ -166,7 +198,7 @@ def test_summarize_exception_legacy(file_name, error_msg):
 
 def test_negative_dividend():
     summary = get_elster_summary("negative_dividend.xlsx", 2018, "monthly")
-    assert_allclose(summary, [43.54, 0, 0, 43.54, 0, 0])
+    assert_allclose(summary, [43.54, 0, 0, 43.54, 0, 0, 0, 0])
 
 
 def test_empty():
