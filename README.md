@@ -20,6 +20,7 @@ To keep track of these splits, fill out the sheet `stock_splits` in your transac
 A stock split is assumed to take place after hours. I.e. if a stock split takes place on the 4th of August, any shares bought on that day will be assumed to split the next day. Any shares sold on this day, are seen as not having undergone the split.
 
 NOTE: If you manually kept track of stock splits in the past in your list of transactions, please aware that these splits would be applied on top of your manual bookkeeping. Please check whether these calculations are done correctly.
+NOTE: The Schwab import somewhat tries to account for values pre-/post-split to a certain extent but only can handle splits with integer-based ratios for now. For NVDA, this only is the case for shares held prior to 2007. Since the taxation of capital gains changed anyways around 2009, you are on your own anyways, good luck.
 
 # ESPP and RSUs
 Shares coming from ESPPs or RSU lapses can be treated differently. With ESPP often being sold directly after they are bought, it could actually reduce the reporting burden as one wouldn't expect capital gains from these transactions. If users want to do so, they should indicate the separate treatment by noting down the shares with a different symbol in all relevant transactions, e.g. by using `NVDA-ESPP` and `NVDA-RSU` instead of only `NVDA`. The reporting then will separate them in different calculations. 
@@ -116,6 +117,7 @@ Since all the reporting is done in a very simple and quite naive Python implemen
 # Requirements
 - pandas
 - XlsxWriter
+- yfinance
 
 # Testing
 

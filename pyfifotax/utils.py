@@ -347,6 +347,9 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
     losses_from_shares = -share_losses
     total_gain_forex = sum_decimal(forex_gain_series)
 
+    total_buy_value_forex = sum_decimal(df_forex["Buy Value [EUR]"])
+    total_sell_value_forex = sum_decimal(df_forex["Sell Value [EUR]"])
+
     anlagen = [
         (
             "Anlage KAP",
@@ -370,15 +373,23 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
         ),
         (
             "Anlage N",
-            "Zeile 48: (Werbungskosten Sonstiges): Überweisungsgebühren auf deutsches Konto für Gehaltsbestandteil RSU/ESPP",
+            "Zeile 65: (Werbungskosten Sonstiges): Überweisungsgebühren auf deutsches Konto für Gehaltsbestandteil RSU/ESPP",
             round_decimal(total_fees, precision="0.01"),
         ),
         (
             "Anlage SO",
-            "Zeilen 42 - 48: Gewinn / Verlust aus Verkauf von Fremdwährungen",
-            round_decimal(
-                total_gain_forex, precision="0.01"
-            ),  # here: the sum should be fine
+            "Zeilen 48 - 54: Gewinn / Verlust aus Verkauf von Fremdwährungen",
+            round_decimal(total_gain_forex, precision="0.01"),
+        ),
+        (
+            "Anlage SO",
+            "Zeilen 48 - 54: Veräußerungswert Fremdwährungen",
+            round_decimal(total_sell_value_forex, precision="0.01"),
+        ),
+        (
+            "Anlage SO",
+            "Zeilen 48 - 54: Anschaffungskosten Fremdwährungen",
+            round_decimal(total_buy_value_forex, precision="0.01"),
         ),
     ]
     summary = {
@@ -668,6 +679,8 @@ def transact_dict_to_df(
         "Buy Price [EUR]": [],
         "Sell Price [EUR]": [],
         "Gain [EUR]": [],
+        "Buy Value [EUR]": [],
+        "Sell Value [EUR]": [],
     }
     if consider_costs:
         tmp["Transaction Costs [EUR]"] = []
@@ -711,17 +724,30 @@ def transact_dict_to_df(
                     tmp["Gain [EUR]"].append(
                         round_decimal(to_decimal(0.0), precision="0.01")
                     )
+                    tmp["Buy Value [EUR]"].append(
+                        round_decimal(to_decimal(0.0), precision="0.01")
+                    )
+                    tmp["Sell Value [EUR]"].append(
+                        round_decimal(to_decimal(0.0), precision="0.01")
+                    )
+
                 else:
                     tmp["Gain [EUR]"].append(
+                        round_decimal(to_decimal(0.0), precision="0.01")
+                    )
+                    tmp["Buy Value [EUR]"].append(
+                        round_decimal(to_decimal(0.0), precision="0.01")
+                    )
+                    tmp["Sell Value [EUR]"].append(
                         round_decimal(to_decimal(0.0), precision="0.01")
                     )
 
             if mode.lower() == "daily":
                 tmp["Buy Price [EUR]"].append(
-                    round_decimal(f.buy_price_eur_daily, precision="0.01")
+                    round_decimal(f.buy_price_eur_daily, precision="0.0001")
                 )
                 tmp["Sell Price [EUR]"].append(
-                    round_decimal(f.sell_price_eur_daily, precision="0.01")
+                    round_decimal(f.sell_price_eur_daily, precision="0.0001")
                 )
                 if not tax_free:
                     if consider_costs:
@@ -740,12 +766,24 @@ def transact_dict_to_df(
                         tmp["Gain [EUR]"].append(
                             round_decimal(f.gain_eur_daily, precision="0.01")
                         )
+
+                    tmp["Buy Value [EUR]"].append(
+                        round_decimal(
+                            f.quantity * f.buy_price_eur_daily, precision="0.01"
+                        )
+                    )
+                    tmp["Sell Value [EUR]"].append(
+                        round_decimal(
+                            f.quantity * f.sell_price_eur_daily, precision="0.01"
+                        )
+                    )
+
             else:
                 tmp["Buy Price [EUR]"].append(
-                    round_decimal(f.buy_price_eur_monthly, precision="0.01")
+                    round_decimal(f.buy_price_eur_monthly, precision="0.0001")
                 )
                 tmp["Sell Price [EUR]"].append(
-                    round_decimal(f.sell_price_eur_monthly, precision="0.01")
+                    round_decimal(f.sell_price_eur_monthly, precision="0.0001")
                 )
                 if not tax_free:
                     if consider_costs:
@@ -765,6 +803,17 @@ def transact_dict_to_df(
                         tmp["Gain [EUR]"].append(
                             round_decimal(f.gain_eur_monthly, precision="0.01")
                         )
+
+                    tmp["Buy Value [EUR]"].append(
+                        round_decimal(
+                            f.quantity * f.buy_price_eur_monthly, precision="0.01"
+                        )
+                    )
+                    tmp["Sell Value [EUR]"].append(
+                        round_decimal(
+                            f.quantity * f.sell_price_eur_monthly, precision="0.01"
+                        )
+                    )
 
             if speculative_period is not None or consider_tax_free_forex:
                 if tax_free_holding:
@@ -792,6 +841,8 @@ def transact_dict_to_df(
             "Sell Price [EUR]",
             "Gain before Costs [EUR]",
             "Transaction Costs [EUR]",
+            "Buy Value [EUR]",
+            "Sell Value [EUR]",
             "Gain [EUR]",
         ]
     else:
@@ -804,6 +855,8 @@ def transact_dict_to_df(
             "Sell Price",
             "Buy Price [EUR]",
             "Sell Price [EUR]",
+            "Buy Value [EUR]",
+            "Sell Value [EUR]",
             "Gain [EUR]",
         ]
 
