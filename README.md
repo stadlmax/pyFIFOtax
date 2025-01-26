@@ -117,7 +117,8 @@ Since all the reporting is done in a very simple and quite naive Python implemen
 # Requirements
 - pandas
 - XlsxWriter
-- yfinance
+- yfinance[nospam]
+- requests-cache
 
 # Testing
 

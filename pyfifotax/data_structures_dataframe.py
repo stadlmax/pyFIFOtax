@@ -67,7 +67,7 @@ class ESPPRow(DataFrameRow):
             buy_price, symbol, date, kind="Close"
         )
         if is_historic:
-            split_msg = ": Found no need to adjust values for stock splits, check if this is indeed the case"
+            split_msg = ""
 
         else:
             # TODO: look into supporting arbitary splits
@@ -147,7 +147,7 @@ class RSURow(DataFrameRow):
             fair_market_value, symbol, date, kind="Close"
         )
         if is_historic:
-            split_msg = ": Found no need to adjust values for stock splits, check if this is indeed the case"
+            split_msg = ""
 
         else:
             # TODO: look into supporting arbitary splits
@@ -195,7 +195,7 @@ class RSURow(DataFrameRow):
             fair_market_value, symbol, date, kind="Close"
         )
         if is_historic:
-            split_msg = ": Found no need to adjust values for stock splits, check if this is indeed the case"
+            split_msg = ""
 
         else:
             # TODO: look into supporting arbitary splits
