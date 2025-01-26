@@ -90,7 +90,11 @@ def get_historic_daily_prices(ticker: str):
         hist_adj = hist_adj.set_index("Date")
         hist_adj.to_csv(file_name)
 
-    prices = pd.read_csv(file_name)
+    prices = pd.read_csv(
+        file_name, index_col=0, parse_dates=True, date_format="%Y-%m-%d"
+    )
+    prices.index = prices.index.date
+
     return prices
 
 
@@ -98,23 +102,24 @@ class _HistoricPrices:
     def __init__(self):
         self._prices = {}
 
-    def __getitem__(self, key):
-        if isinstance(key, str):
-            if not key in self._prices:
-                self._prices[key] = get_historic_daily_prices(key)
+    def get_price(self, key: str, date: datetime.date, kind: str = "Close"):
+        if not key in self._prices:
+            self._prices[key] = get_historic_daily_prices(key)
 
-            return self._prices[key]
+        found = False
+        prices = self._prices[key][kind]
 
-        if isinstance(key, tuple) and len(key) == 2:
-            ticker, date = key
-            if not ticker in self._prices:
-                self._prices[ticker] = get_historic_daily_prices(ticker)
+        while not found:
+            try:
+                price = prices[date]
+                found = True
+            except KeyError:
+                # if exact date not found, find closest previous date
+                # e.g. might happen with vestings on days with closed
+                # markets or other similar events
+                date = date - datetime.timedelta(days=1)
 
-            return self._prices[ticker][date]
-
-        raise KeyError(
-            f"Unsupported key ({key})!. Expected either 'str' or a tuple of 'str' and 'date'"
-        )
+        return price
 
 
 # global pseudo-singleton for managing state
@@ -124,8 +129,8 @@ historic_prices = _HistoricPrices()
 def is_price_historic(
     price: decimal.Decimal, symbol: str, date: datetime.date, kind: str = "Close"
 ):
-    hist_price = pd.to_numeric(historic_prices[(symbol, date)][kind])
+    hist_price = pd.to_numeric(historic_prices.get_price(symbol, date, kind=kind))
 
-    if (price - hist_price) / hist_price < pd.to_numeric(0.01):
+    if (price - hist_price) / hist_price < pd.to_numeric(0.05):
         return True, hist_price
     return False, hist_price
