@@ -1,36 +1,43 @@
 import os
 import datetime
+import decimal
 import pandas as pd
 import yfinance as yf
+import requests_cache
+from pathlib import Path
 
 
-def modify_history(hist):
+def modify_history(hist: pd.DataFrame):
     hist = hist.reset_index()
     hist = hist[["Date", "Low", "High", "Open", "Close"]]
     return hist
 
 
-def modify_splits(splits, min_date):
+def modify_splits(splits: pd.DataFrame, min_date: datetime.date):
     splits[min_date] = 1.0
     splits = splits.sort_index()
     return splits
 
 
-def modify_history_and_splits(hist, splits):
+def modify_history_and_splits(hist: pd.DataFrame, splits: pd.DataFrame):
     hist = modify_history(hist)
     min_date = hist.Date.min()
     splits = modify_splits(splits, min_date)
     return hist, splits
 
 
-def get_history_and_splits_from_ticker(ticker):
-    stock = yf.Ticker(ticker)
+def get_history_and_splits_from_ticker(ticker: str):
+    cache = requests_cache.CachedSession(
+        cache_name=os.path.join(f"{Path.home()}", ".cache", "pyfifotax-yfinance-cache"),
+        backend="sqlite",
+    )
+    stock = yf.Ticker(ticker, session=cache)
     hist = stock.history(period="max")
     splits = stock.splits
     return modify_history_and_splits(hist, splits)
 
 
-def get_reverse_splits(splits):
+def get_reverse_splits(splits: pd.DataFrame):
     rev_splits = splits.prod() / splits.cumprod()
     map = {}
     max_date = pd.Timestamp(year=2100, month=12, day=31, tz="America/New_York")
@@ -44,7 +51,7 @@ def get_reverse_splits(splits):
     return map
 
 
-def get_rev_split_from_timestamp(timestamp, rev_splits):
+def get_rev_split_from_timestamp(timestamp: pd.Timestamp, rev_splits: pd.DataFrame):
     for start, end in rev_splits.keys():
         if start <= timestamp < end:
             return rev_splits[(start, end)]
@@ -52,7 +59,7 @@ def get_rev_split_from_timestamp(timestamp, rev_splits):
     raise ValueError(f"Could not find mapping for {timestamp}")
 
 
-def adjust_row(row, rev_splits):
+def adjust_row(row: pd.core.series.Series, rev_splits: pd.DataFrame):
     factor = get_rev_split_from_timestamp(row.Date, rev_splits)
     row.Low = row.Low * factor
     row.High = row.High * factor
@@ -61,7 +68,7 @@ def adjust_row(row, rev_splits):
     return row
 
 
-def adjust_history_for_splits(hist, splits):
+def adjust_history_for_splits(hist: pd.DataFrame, splits: pd.DataFrame):
     rev_splits = get_reverse_splits(splits)
     return hist.apply(lambda row: adjust_row(row, rev_splits), axis=1)
 
@@ -93,15 +100,16 @@ class _HistoricPrices:
 
     def __getitem__(self, key):
         if isinstance(key, str):
-            # key is ticker, will error out if not exists
             if not key in self._prices:
                 self._prices[key] = get_historic_daily_prices(key)
 
-            # return whole history of values
             return self._prices[key]
 
         if isinstance(key, tuple) and len(key) == 2:
             ticker, date = key
+            if not ticker in self._prices:
+                self._prices[ticker] = get_historic_daily_prices(ticker)
+
             return self._prices[ticker][date]
 
         raise KeyError(
@@ -113,9 +121,11 @@ class _HistoricPrices:
 historic_prices = _HistoricPrices()
 
 
-def is_price_historic(price, symbol, date, kind="Close"):
+def is_price_historic(
+    price: decimal.Decimal, symbol: str, date: datetime.date, kind: str = "Close"
+):
     hist_price = pd.to_numeric(historic_prices[(symbol, date)][kind])
 
-    if (price - hist_price) / hist_price < pd.to_humeric(0.01):
+    if (price - hist_price) / hist_price < pd.to_numeric(0.01):
         return True, hist_price
     return False, hist_price
