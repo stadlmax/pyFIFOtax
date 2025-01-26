@@ -151,8 +151,6 @@ class RSURow(DataFrameRow):
 
         else:
             # TODO: look into supporting arbitary splits
-            # assumptions for now: if adjusted: price < hist_price and integer
-            print("lapse", hist_price, fair_market_value)
             split_factor = round(hist_price / fair_market_value)
             fair_market_value = fair_market_value * split_factor
             net_quantity = net_quantity * split_factor
@@ -200,8 +198,6 @@ class RSURow(DataFrameRow):
 
         else:
             # TODO: look into supporting arbitary splits
-            # assumptions for now: if adjusted: price < hist_price and integer
-            print("deposit", hist_price, fair_market_value)
             split_factor = round(hist_price / fair_market_value)
             fair_market_value = fair_market_value * split_factor
             net_quantity = net_quantity * split_factor
