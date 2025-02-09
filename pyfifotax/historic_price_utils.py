@@ -74,27 +74,10 @@ def adjust_history_for_splits(hist: pd.DataFrame, splits: pd.DataFrame):
 
 
 def get_historic_daily_prices(ticker: str):
-    mod_date = None
-    today = datetime.date.today()
-
-    file_name = f"{ticker.lower()}-historic-daily-prices.csv"
-    if os.path.exists(file_name):
-        mod_time = os.path.getmtime(file_name)
-        mod_date = datetime.datetime.fromtimestamp(mod_time).date()
-
-    if mod_date != today:
-        print(f"Downloading more recent stock data for ticker-symbol {ticker} ...")
-        hist, splits = get_history_and_splits_from_ticker(ticker)
-        hist_adj = adjust_history_for_splits(hist, splits)
-        hist_adj.Date = hist_adj.Date.apply(pd.Timestamp.date)
-        hist_adj = hist_adj.set_index("Date")
-        hist_adj.to_csv(file_name)
-
-    prices = pd.read_csv(
-        file_name, index_col=0, parse_dates=True, date_format="%Y-%m-%d"
-    )
-    prices.index = prices.index.date
-
+    hist, splits = get_history_and_splits_from_ticker(ticker)
+    prices = adjust_history_for_splits(hist, splits)
+    prices.Date = prices.Date.apply(pd.Timestamp.date)
+    prices = prices.set_index("Date")
     return prices
 
 
