@@ -379,22 +379,32 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
             "Zeile 65: (Werbungskosten Sonstiges): Überweisungsgebühren auf deutsches Konto für Gehaltsbestandteil RSU/ESPP",
             round_decimal(total_fees, precision="0.01"),
         ),
-        (
-            "Anlage SO",
-            "Zeilen 48 - 54: Gewinn / Verlust aus Verkauf von Fremdwährungen",
-            round_decimal(total_gain_forex, precision="0.01"),
-        ),
-        (
-            "Anlage SO",
-            "Zeilen 48 - 54: Veräußerungswert Fremdwährungen",
-            round_decimal(total_sell_value_forex, precision="0.01"),
-        ),
-        (
-            "Anlage SO",
-            "Zeilen 48 - 54: Anschaffungskosten Fremdwährungen",
-            round_decimal(total_buy_value_forex, precision="0.01"),
-        ),
     ]
+
+    if any([total_gain_forex, total_sell_value_forex, total_buy_value_forex]):
+        anlagen += [
+            (
+                "Anlage SO",
+                "Zeile 48: Art des Wirtschaftsguts",
+                "Fremdwährungen",
+            ),
+            (
+                "Anlage SO",
+                "Zeile 50: Veräußerungspreis",
+                round_decimal(total_sell_value_forex, precision="0.01"),
+            ),
+            (
+                "Anlage SO",
+                "Zeile 51: Anschaffungskosten",
+                round_decimal(total_buy_value_forex, precision="0.01"),
+            ),
+            (
+                "Anlage SO",
+                "Zeile 53: Gewinn / Verlust",
+                round_decimal(total_gain_forex, precision="0.01"),
+            ),
+        ]
+
     summary = {
         "ELSTER - Anlage": [a[0] for a in anlagen],
         "ELSTER - Zeile (Suggestion!)": [a[1] for a in anlagen],
@@ -408,9 +418,8 @@ def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
     if df.empty:
         return
 
-    for c in df.columns:
-        if not df[c].empty and isinstance(df[c].iloc[0], decimal.Decimal):
-            df[c] = df[c].astype(float)
+    floats=df.apply(pd.to_numeric, errors="coerce", downcast="float")
+    df.mask(floats.notna(), floats, inplace=True)
 
     df.to_excel(writer, sheet_name=name, index=False, float_format="%.2f")
     worksheet = writer.sheets[name]
