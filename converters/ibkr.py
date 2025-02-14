@@ -319,6 +319,7 @@ class IbkrConverter(CSVConverter):
                     "Description",
                     "Conid",
                     "Security ID",
+                    "Underlying",
                     "Listing Exch",
                     "Multiplier",
                     "Code",
