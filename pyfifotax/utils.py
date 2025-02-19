@@ -824,15 +824,15 @@ def transact_dict_to_df(
             if speculative_period is not None or consider_tax_free_forex:
                 if tax_free_holding:
                     tmp["Comment"].append(
-                        f"Held for {holding_period} days, no taxable gains as outside of speculative period of {speculative_period} years."
+                        f"Held for {holding_period} days, not taxable as outside of speculative period of {speculative_period} year"
                     )
                 elif tax_free_forex:
                     tmp["Comment"].append(
-                        f"FOREX not acquired (e.g. received dividend payments), thus gains not taxed."
+                        f"FOREX not acquired (e.g. received dividend payments), thus gains are not taxable"
                     )
                 else:
                     tmp["Comment"].append(
-                        f"Held for {holding_period} days, taxable gains as shorter within speculative period of {speculative_period} years."
+                        f"Held for {holding_period} days, taxable since within the speculative period of {speculative_period} year"
                     )
 
     if consider_costs:
