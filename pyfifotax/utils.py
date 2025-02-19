@@ -406,8 +406,8 @@ def summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes):
         ]
 
     summary = {
-        "ELSTER - Anlage": [a[0] for a in anlagen],
-        "ELSTER - Zeile (Suggestion!)": [a[1] for a in anlagen],
+        "ELSTER – Anlage": [a[0] for a in anlagen],
+        "ELSTER – Zeile": [a[1] for a in anlagen],
         "Value": [a[2] for a in anlagen],
     }
     df_summary = pd.DataFrame(summary)
