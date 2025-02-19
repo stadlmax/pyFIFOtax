@@ -425,10 +425,14 @@ def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
     worksheet = writer.sheets[name]
     worksheet.autofit()  # Adjust column widths to their maximum lengths
     worksheet.set_landscape()
-    worksheet.set_paper(9)  # A4
     worksheet.set_header(f"&C{name}")  # Put sheet name into the header
     worksheet.hide_gridlines(0)  # Do not hide gridlines
     worksheet.center_horizontally()
+
+    if name == "Foreign Currencies":
+        worksheet.set_paper(8)  # A3
+    else:
+        worksheet.set_paper(9)  # A4
 
 
 def add_total_amount_row(df):
