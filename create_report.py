@@ -74,7 +74,7 @@ def main(sub_dir, file_name, report_year, rate_mode, create_all_reports, log_lev
 
     else:
         report.create_excel_report(
-            report_year, rate_mode, f"tax_report_{report_year}_{rate_mode}_rates"
+            report_year, rate_mode, f"tax_report_{report_year}_{rate_mode}_rates.xlsx"
         )
         report.create_excel_report_awv(report_year, f"awv_report_{report_year}.xlsx")
 
