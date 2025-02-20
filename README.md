@@ -53,7 +53,7 @@ python3 create_report.py -dir <sub_dir of inputs/outputs> -f <file name of the t
 ```
 Note that the input file name should include the file extension, e.g. `transactions.xlsx`.
 
-For the reporting, you can choose conversion based on daily exchange rates (`-m daily`) or monthly averages (`-m monthly`). Both should (no guarantee of correctness) be fine in terms of tax reporting. However, one should (no guarantee of correctness) be consistent across years. It might be just wise to choose it once and go for it in the following years. But note that it can actually make quite a difference.
+For the reporting, you can choose conversion based on daily exchange rates (`-m daily`, default) or monthly averages (`-m monthly`). Both should (no guarantee of correctness) be fine in terms of tax reporting. However, one should (no guarantee of correctness) be consistent across years. It might be just wise to choose it once and go for it in the following years. But note that it can actually make quite a difference.
 
 The generated report will contain several sheets with details of the transactions matching sell and buy orders based on the FIFO principle and including the right conversion rates to EUR. The last sheet will contain a summary intended as guidance for ELSTER.
 

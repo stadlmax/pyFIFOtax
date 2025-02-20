@@ -37,7 +37,8 @@ parser.add_argument(
     "-m",
     dest="rate_mode",
     choices=["daily", "monthly"],
-    help="which exchange rates to apply, either daily exchange rates or monthly averages",
+    default="daily",
+    help="which exchange rates to apply, either daily exchange rates (default) or monthly averages",
 )
 parser.add_argument(
     "--all",
