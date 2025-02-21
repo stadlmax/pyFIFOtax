@@ -8,33 +8,33 @@ logger = logging.getLogger("pyfifotax")
 
 
 parser = argparse.ArgumentParser(
-    description="Simple tool for calculating gains/losses from \
+    description="Tool for calculating gains/losses from \
         transactions with shares on foreign exchanges based on FIFO methods, \
-        intended for income tax reports in Germany. Note that the output of \
-        this tool is just a suggestions and not a recommendations. \n \
+        intended for income tax reports in Germany. Note, that the output of \
+        this tool is just a suggestion and not a recommendation.\n \
         There is no guarantee for correctness. \n \
         To be sure, please contact your tax advisor for reliable information."
 )
 parser.add_argument(
-    "-dir",
+    "-d", "--dir",
     dest="sub_dir",
     type=str,
-    help="sub_dir which contains the list of transactions (input)",
+    help="directory which contains the transactions and the output",
 )
 parser.add_argument(
-    "-f",
+    "-f", "--file",
     dest="file_name",
     type=str,
-    help="file name of to file containing list of transactions",
+    help="filename which contains the transactions",
 )
 parser.add_argument(
-    "-y",
+    "-y", "--year",
     dest="report_year",
     type=int,
     help="year for which report should be generated",
 )
 parser.add_argument(
-    "-m",
+    "-m", "--mode",
     dest="rate_mode",
     choices=["daily", "monthly"],
     default="daily",
