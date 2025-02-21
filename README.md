@@ -48,8 +48,23 @@ Same-day events are currently ordered based on certain priorities to cover typic
 
 # Report Generation
 `create_report.py` will generate the report for you. Usage:
+
 ```
-python3 create_report.py -dir <sub_dir of inputs/outputs> -f <file name of the transaction history> -y <report year> -m <kind of exchange rates> [--all]
+create_report.py [-h] [-d SUB_DIR] [-f FILE_NAME] [-y REPORT_YEAR] [-m {daily,monthly}] [--all] [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
+
+options:
+  -h, --help            show this help message and exit
+  -d SUB_DIR, --dir SUB_DIR
+                        directory which contains the transactions and the output
+  -f FILE_NAME, --file FILE_NAME
+                        filename which contains the transactions
+  -y REPORT_YEAR, --year REPORT_YEAR
+                        year for which report should be generated
+  -m {daily,monthly}, --mode {daily,monthly}
+                        which exchange rates to apply, either daily exchange rates (default) or monthly averages
+  --all                 If set, generate reports for all years found in the data, and both daily and monthly exchange rates. Overrides both 'rate_mode' and 'report_year'.
+  --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
+                        sets the logging level. Default: warning
 ```
 Note that the input file name should include the file extension, e.g. `transactions.xlsx`.
 
