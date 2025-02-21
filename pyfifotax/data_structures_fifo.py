@@ -245,7 +245,16 @@ class FIFOQueue:
 
         self.log_pop(quantity, front_quantity, sell_price, sell_date)
 
-        if quantity < front_quantity:
+        if math.isclose(quantity, front_quantity):
+            self.total_quantity -= front_quantity
+            pop_asset = self.assets.pop(0)
+            pop_asset.sell_date = sell_date
+            pop_asset.sell_price = sell_price
+            if sell_cost is not None:
+                pop_asset.sell_cost = sell_cost
+                pop_asset.sell_cost_currency = sell_cost_currency
+            return [pop_asset]
+        elif quantity < front_quantity:
             pop_asset = from_asset(self.peek(), quantity)
             pop_asset.sell_price = sell_price
             pop_asset.sell_date = sell_date
@@ -254,15 +263,6 @@ class FIFOQueue:
                 pop_asset.sell_cost_currency = sell_cost_currency
             self.peek().quantity -= quantity
             self.total_quantity -= quantity
-            return [pop_asset]
-        elif math.isclose(quantity, front_quantity):
-            self.total_quantity -= front_quantity
-            pop_asset = self.assets.pop(0)
-            pop_asset.sell_date = sell_date
-            pop_asset.sell_price = sell_price
-            if sell_cost is not None:
-                pop_asset.sell_cost = sell_cost
-                pop_asset.sell_cost_currency = sell_cost_currency
             return [pop_asset]
         else:
             # quantity is larger
