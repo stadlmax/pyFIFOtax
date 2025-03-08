@@ -88,7 +88,21 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
                 schwab_dividend_events.append(tmp)
 
             elif e["Action"] == "Sale" and e["Description"] == "Share Sale":
-                schwab_sell_events.append(SellOrderRow.from_schwab_json(e).to_dict())
+                # some sell orders might be split into different logical orders
+                # at different prices, hence divide them up
+                total_quantity = pd.to_numeric(e["Quantity"])
+                total_fees = pd.to_numeric(e["FeesAndCommissions"].strip("$"))
+                for det in e["TransactionDetails"]:
+                    e_det = {**e}
+                    shares = det["Details"]["Shares"]
+                    e_det["Quantity"] = det["Details"]["Shares"]
+                    e_det["TransactionDetails"] = [det]
+                    e_det["Amount"] = None
+                    fees_per_order = total_fees * pd.to_numeric(shares) / total_quantity
+                    e_det["FeesAndCommissions"] = f"${fees_per_order:.3}"
+                    schwab_sell_events.append(
+                        SellOrderRow.from_schwab_json(e_det).to_dict()
+                    )
 
             elif (
                 e["Action"] == "Wire Transfer"

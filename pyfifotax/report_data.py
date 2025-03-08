@@ -37,6 +37,7 @@ from pyfifotax.utils import (
     create_report_sheet,
 )
 from pyfifotax.utils import to_decimal
+from pyfifotax.historic_price_utils import get_splits_from_ticker
 
 
 class ReportData:
@@ -54,11 +55,6 @@ class ReportData:
 
         # save flag to apply stock splits and remember path to file defining splits
         self.apply_stock_splits = apply_stock_splits
-        self.stock_split_file_path = os.path.join(sub_dir, "stock_splits.xlsx")
-        if apply_stock_splits and not os.path.exists(self.stock_split_file_path):
-            raise FileNotFoundError(
-                f"{self.stock_split_file_path} not found but set apply_stock_splits to True, abort."
-            )
 
         # list of unsold shares, a sell order will move a share from this list
         # to the list of sold shares based on FIFO requirements
@@ -143,13 +139,6 @@ class ReportData:
             warnings.warn(msg, DeprecationWarning)
             raw_data = read_data_legacy(self.sub_dir, self.file_name)
 
-        if self.apply_stock_splits:
-            with pd.ExcelFile(self.stock_split_file_path) as xls:
-                dtypes = StockSplitRow.type_dict()
-                dtypes["date"] = None
-                df_stock_splits = pd.read_excel(xls, parse_dates=["date"], dtype=dtypes)
-            raw_data.stock_splits = df_stock_splits
-
         used_symbols = []
         used_symbols.extend(list(raw_data.rsu.symbol.unique()))
         if not self.legacy_mode:
@@ -172,8 +161,6 @@ class ReportData:
         used_currencies.append("EUR")
 
         if not self.legacy_mode:
-            if self.apply_stock_splits:
-                used_symbols.extend(list(raw_data.stock_splits.symbol.unique()))
             used_currencies.extend(list(raw_data.espp.currency.unique()))
             used_currencies.extend(list(raw_data.money_transfers.currency.unique()))
 
@@ -210,10 +197,21 @@ class ReportData:
                 raw_data.currency_conversions, daily_rates=self.daily_rates
             )
         )
-        if raw_data.stock_splits is not None:
-            self.report_events.extend(
-                StockSplitEvent.from_report(raw_data.stock_splits)
-            )
+        if self.apply_stock_splits:
+            split_dfs = []
+            for ticker in used_symbols:
+                splits = get_splits_from_ticker(ticker)
+                splits = splits.to_frame()
+                splits["symbol"] = ticker
+                splits.reset_index(inplace=True)
+                splits.rename(
+                    columns={"Stock Splits": "shares_after_split", "Date": "date"},
+                    inplace=True,
+                )
+                split_dfs.append(splits)
+            if split_dfs:
+                stock_splits = pd.concat(split_dfs, ignore_index=True)
+                self.report_events.extend(StockSplitEvent.from_report(stock_splits))
         if not self.legacy_mode:
             self.report_events.extend(
                 MoneyTransferEvent.from_report(raw_data.money_transfers)

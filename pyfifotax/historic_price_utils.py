@@ -26,14 +26,32 @@ def modify_history_and_splits(hist: pd.DataFrame, splits: pd.DataFrame):
     return hist, splits
 
 
+def get_splits_from_ticker(ticker: str):
+    cache = requests_cache.CachedSession(
+        cache_name=os.path.join(
+            f"{Path.home()}", ".cache", "pyfifotax", "yfinance-cache"
+        ),
+        backend="sqlite",
+    )
+    stock = yf.Ticker(ticker, session=cache)
+    splits = stock.splits
+    return splits
+
+
 def get_history_and_splits_from_ticker(ticker: str):
     cache = requests_cache.CachedSession(
-        cache_name=os.path.join(f"{Path.home()}", ".cache", "pyfifotax-yfinance-cache"),
+        cache_name=os.path.join(
+            f"{Path.home()}", ".cache", "pyfifotax", "yfinance-cache"
+        ),
         backend="sqlite",
     )
     stock = yf.Ticker(ticker, session=cache)
     hist = stock.history(period="max")
     splits = stock.splits
+    if hist.empty:
+        raise ValueError(
+            f"Could not download stock prices for {ticker}, update yfinance or try again later."
+        )
     return modify_history_and_splits(hist, splits)
 
 
@@ -75,7 +93,10 @@ def adjust_history_for_splits(hist: pd.DataFrame, splits: pd.DataFrame):
 
 def get_historic_daily_prices(ticker: str):
     hist, splits = get_history_and_splits_from_ticker(ticker)
-    prices = adjust_history_for_splits(hist, splits)
+    if not splits.empty:
+        prices = adjust_history_for_splits(hist, splits)
+    else:
+        prices = hist
     prices.Date = prices.Date.apply(pd.Timestamp.date)
     prices = prices.set_index("Date")
     return prices
