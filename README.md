@@ -15,7 +15,7 @@ NOTE: an update extends the functionality of the reporting scripts (including su
 # Stock Splits
 Over time, many companies will announce stock splits to reduce the price of their shares. Typical splits mean that for one existing share, you will receive a certain number of additional shares, e.g. 1, 3 ,or 9 in 2:1, 4:1, or 10:1 splits. NVDA, however, itself also had "odd" splits in the past, e.g. a 3:2 split, i.e. you received one additional share for two existing ones or half a share for one existing share. Technically, also reverse splits are possible, e.g. for two existing shares you will have one share after the split.
 
-To keep track of these splits, fill out the sheet `stock_splits` in your transaction spreadsheet by adding the symbol of asset for which the split should be tracked, the date, and the number of shares after the split. For instance, a 4:1 split is denoted as 4.0, a 3:2 split would be denoted as 1.5. Leaving this file empty (but keeping the header) will lead to no splits applied. `ReportData` also has now an additional boolean flag to toggle this behavior (`apply_stock_splits`) even if the file is filled with some content. 
+`ReportData` has an additional boolean flag (`apply_stock_splits`) to toggle whether stock splits should be automatically applied or not. If applied, historical split data is queried from Yahoo Finance. If not applied, it is up to you to keep historical data correct and up-to-date.
 
 A stock split is assumed to take place after hours. I.e. if a stock split takes place on the 4th of August, any shares bought on that day will be assumed to split the next day. Any shares sold on this day, are seen as not having undergone the split.
 
@@ -119,6 +119,8 @@ Since all the reporting is done in a very simple and quite naive Python implemen
 - XlsxWriter
 - yfinance[nospam]
 - requests-cache
+
+Please make sure to update yfinance to the most revent version (0.2.54 as of now).
 
 # Testing
 

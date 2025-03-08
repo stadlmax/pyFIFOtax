@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Optional, Union
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 from pyfifotax.data_structures_dataframe import (
     ESPPRow,
@@ -52,8 +53,10 @@ def get_reference_rates():
     # check whether to download more recent exchange-rate data
     mod_date = None
     today = datetime.date.today()
-    if os.path.exists("eurofxref-hist.csv"):
-        mod_time = os.path.getmtime("eurofxref-hist.csv")
+    cache_path = os.path.join(f"{Path.home()}", ".cache", "pyfifotax")
+    cache_file_name = os.path.join(cache_path, "eurofxref-hist.csv")
+    if os.path.exists(cache_file_name):
+        mod_time = os.path.getmtime(cache_file_name)
         mod_date = datetime.datetime.fromtimestamp(mod_time).date()
 
     if mod_date != today:
@@ -61,10 +64,14 @@ def get_reference_rates():
         response = requests.get(
             "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.zip?69474b1034fa15ae36103fbf3554d272"
         )
+        if not response.status_code == 200:
+            raise RuntimeError(
+                f"Failed to download more recent exchange rate data, try again (status code {response.status_code})"
+            )
         zip_file = zipfile.ZipFile(io.BytesIO(response.content))
-        zip_file.extractall(".")
+        zip_file.extractall(cache_path)
 
-    daily_ex_rates = pd.read_csv("eurofxref-hist.csv", parse_dates=["Date"])
+    daily_ex_rates = pd.read_csv(cache_file_name, parse_dates=["Date"])
     daily_ex_rates = daily_ex_rates.loc[
         :, ~daily_ex_rates.columns.str.contains("^Unnamed")
     ]
@@ -139,7 +146,6 @@ class RawData:
     sell_orders: pd.DataFrame
     currency_conversions: pd.DataFrame
     money_transfers: Optional[pd.DataFrame]
-    stock_splits: Optional[pd.DataFrame]
 
 
 def read_data_legacy(sub_dir, file_name):
@@ -242,7 +248,6 @@ def read_data_legacy(sub_dir, file_name):
         )
         df_currency_conversions["comment"] = ""
 
-        df_stock_splits = None
         df_espp = None
         df_money_transfers = None
 
@@ -254,7 +259,6 @@ def read_data_legacy(sub_dir, file_name):
         df_sell_orders,
         df_currency_conversions,
         df_money_transfers,
-        df_stock_splits,
     )
 
 
@@ -299,7 +303,6 @@ def read_data(sub_dir, file_name):
         df_currency_conversions = pd.read_excel(
             xls, sheet_name="currency_conversions", parse_dates=["date"], dtype=dtypes
         )
-        df_stock_splits = None  # set later
 
         dtypes = MoneyTransferRow.type_dict()
         dtypes["date"] = None
@@ -319,7 +322,6 @@ def read_data(sub_dir, file_name):
         df_sell_orders,
         df_currency_conversions,
         df_money_transfers,
-        df_stock_splits,
     )
 
 
@@ -485,12 +487,6 @@ def write_report(
         and df_taxes.empty
     ):
         return
-
-    df_shares = df_shares.copy()
-    df_forex = df_forex.copy()
-    df_dividends = df_dividends.copy()
-    df_fees = df_fees.copy()
-    df_taxes = df_taxes.copy()
 
     df_summary = summarize_report(df_shares, df_forex, df_dividends, df_fees, df_taxes)
 

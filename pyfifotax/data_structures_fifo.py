@@ -189,8 +189,8 @@ class FIFOQueue:
                 # rounding errors below 1 currency unit
                 if quantity < self.total_quantity + to_decimal(1.0):
                     msg = f"Trying to convert {quantity:.2f} {symbol}"
-                    msg += f"despite only owning {self.total_quantity} {symbol}."
-                    msg += "Assuming that this minor difference comes from rounding errors, proceeding with rounding down."
+                    msg += f" despite only owning {self.total_quantity} {symbol}."
+                    msg += " Assuming that this minor difference comes from rounding errors, proceeding with rounding down."
                     warnings.warn(msg)
                     return self.pop(self.total_quantity, sell_price, sell_date)
                 raise ValueError(

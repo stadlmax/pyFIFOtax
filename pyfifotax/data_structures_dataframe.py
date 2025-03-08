@@ -368,6 +368,10 @@ class SellOrderRow(DataFrameRow):
 
     @staticmethod
     def from_schwab_json(json_dict: dict) -> SellOrderRow:
+        if not len(json_dict["TransactionDetails"]) == 1:
+            raise RuntimeError(
+                "Could not convert Sell Order information from Schwab JSON, expected TransactionDetails to be of length 1."
+            )
         date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
         symbol = json_dict["Symbol"]
         fees = pd.to_numeric(
@@ -378,20 +382,9 @@ class SellOrderRow(DataFrameRow):
         quantity = pd.to_numeric(json_dict["Quantity"])
         details = json_dict["TransactionDetails"]
 
-        sale_price = details[0]["Details"]["SalePrice"]
-        check_quantity = pd.to_numeric(0)
-        for det in details:
-            if not det["Details"]["SalePrice"] == sale_price:
-                raise ValueError(
-                    "Unexpected behavior when converting SellOrder data from Schwab JSON, check [TransactionDetails][i][Details][SalePrices] for inconsistent values"
-                )
-            check_quantity += pd.to_numeric(det["Details"]["Shares"])
-        if not check_quantity == quantity:
-            raise ValueError(
-                "Unexpected behavior when converting SellOrder data from Schwab JSON, check [TransactionDetails][i][Details][Shares] for inconsistent values"
-            )
-
-        sale_price = pd.to_numeric(sale_price.strip("$").replace(",", ""))
+        sale_price = pd.to_numeric(
+            details[0]["Details"]["SalePrice"].strip("$").replace(",", "")
+        )
 
         # sell-orders typically should always be denoted in historical values
         # TODO: check if this is the case and potentially fix
