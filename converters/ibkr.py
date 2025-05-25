@@ -227,6 +227,10 @@ class IbkrConverter(CSVConverter):
             return False
 
         symbol = self.row[4].split(" ")[0]
+        if '(' in symbol and ')' in symbol:
+            ticker, isin = re.split(r'[()]', symbol)[:-1]
+            symbol = isin if self._ticker_to_isin else ticker
+
         self.df_dividends.loc[len(self.df_dividends.index)] = [
             date.fromisoformat(self.row[3]),  # Date
             symbol,
