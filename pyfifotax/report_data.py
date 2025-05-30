@@ -37,7 +37,7 @@ from pyfifotax.utils import (
     create_report_sheet,
 )
 from pyfifotax.utils import to_decimal
-from pyfifotax.historic_price_utils import get_splits_from_ticker
+from pyfifotax.historic_price_utils import get_history_and_splits_from_ticker
 
 
 class ReportData:
@@ -200,15 +200,16 @@ class ReportData:
         if self.apply_stock_splits:
             split_dfs = []
             for ticker in used_symbols:
-                splits = get_splits_from_ticker(ticker)
-                splits = splits.to_frame()
-                splits["symbol"] = ticker
-                splits.reset_index(inplace=True)
-                splits.rename(
-                    columns={"Stock Splits": "shares_after_split", "Date": "date"},
-                    inplace=True,
-                )
-                split_dfs.append(splits)
+                _, splits = get_history_and_splits_from_ticker(ticker)
+                if splits is not None:
+                    splits = splits.to_frame()
+                    splits["symbol"] = ticker
+                    splits.reset_index(inplace=True)
+                    splits.rename(
+                        columns={"Stock Splits": "shares_after_split", "Date": "date"},
+                        inplace=True,
+                    )
+                    split_dfs.append(splits)
             if split_dfs:
                 stock_splits = pd.concat(split_dfs, ignore_index=True)
                 self.report_events.extend(StockSplitEvent.from_report(stock_splits))
