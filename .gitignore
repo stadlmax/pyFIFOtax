@@ -1,6 +1,9 @@
 __pycache__/
 .ipynb_checkpoints
 personal/*
+legacy/personal/*
 !personal/README.md
+!legacy/personal/README.md
 notebook_personal.ipynb
 .venv/
+.DS_Store
