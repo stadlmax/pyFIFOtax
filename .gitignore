@@ -3,3 +3,4 @@ __pycache__/
 personal/*
 !personal/README.md
 notebook_personal.ipynb
+.venv/

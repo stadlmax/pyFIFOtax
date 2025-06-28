@@ -593,7 +593,7 @@ class StockSplitRow(DataFrameRow):
     @staticmethod
     def from_df_row(row: Series) -> StockSplitRow:
         return StockSplitRow(
-            date=row.date.date(),
+            date=row.date,
             symbol=row.symbol,
             shares_after_split=row.shares_after_split,
         )
