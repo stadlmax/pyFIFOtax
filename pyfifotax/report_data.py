@@ -1,9 +1,9 @@
 import os
 import warnings
+import datetime
 import pandas as pd
 
 import pyfifotax.data_structures_awv as awv
-from pyfifotax.data_structures_dataframe import StockSplitRow
 from pyfifotax.data_structures_event import (
     ReportEvent,
     RSUEvent,
@@ -37,7 +37,7 @@ from pyfifotax.utils import (
     create_report_sheet,
 )
 from pyfifotax.utils import to_decimal
-from pyfifotax.historic_price_utils import get_history_and_splits_from_ticker
+from pyfifotax.historic_price_utils import get_splits_for_symbol
 
 
 class ReportData:
@@ -197,18 +197,21 @@ class ReportData:
                 raw_data.currency_conversions, daily_rates=self.daily_rates
             )
         )
+        # across all events, find most recent date
+        if len(self.report_events) > 0:
+            most_recent_date = max([e.date for e in self.report_events])
+        else:
+            most_recent_date = datetime.date.today()
+
         if self.apply_stock_splits:
             split_dfs = []
-            for ticker in used_symbols:
-                _, splits = get_history_and_splits_from_ticker(ticker)
+            for symbol in used_symbols:
+                splits = get_splits_for_symbol(symbol, most_recent_date)
                 if splits is not None:
-                    splits = splits.to_frame()
-                    splits["symbol"] = ticker
-                    splits.reset_index(inplace=True)
-                    splits.rename(
-                        columns={"Stock Splits": "shares_after_split", "Date": "date"},
-                        inplace=True,
-                    )
+                    splits = splits.copy()
+                    splits["date"] = splits.index
+                    splits.reset_index(inplace=True, drop=True)
+                    splits["symbol"] = symbol
                     split_dfs.append(splits)
             if split_dfs:
                 stock_splits = pd.concat(split_dfs, ignore_index=True)
