@@ -7,3 +7,5 @@ legacy/personal/*
 notebook_personal.ipynb
 .venv/
 .DS_Store
+schwab_history.json
+.streamlit/
