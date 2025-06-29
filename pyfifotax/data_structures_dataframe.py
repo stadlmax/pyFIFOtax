@@ -75,7 +75,7 @@ class ESPPRow(DataFrameRow):
             split_factor = round(hist_price / buy_price)
             buy_price = buy_price * split_factor
             fair_market_value = fair_market_value * split_factor
-            quantity = quantity * split_factor
+            quantity = quantity / split_factor
             split_msg = f": adjusted values for stock splits with an assumed split-factor of {split_factor}"
 
         return ESPPRow(
@@ -153,8 +153,8 @@ class RSURow(DataFrameRow):
             # TODO: look into supporting arbitary splits
             split_factor = round(hist_price / fair_market_value)
             fair_market_value = fair_market_value * split_factor
-            net_quantity = net_quantity * split_factor
-            gross_quantity = gross_quantity * split_factor
+            net_quantity = net_quantity / split_factor
+            gross_quantity = gross_quantity / split_factor
             split_msg = f": adjusted values for stock splits with an assumed split-factor of {split_factor}"
 
         return (
@@ -200,7 +200,7 @@ class RSURow(DataFrameRow):
             # TODO: look into supporting arbitary splits
             split_factor = round(hist_price / fair_market_value)
             fair_market_value = fair_market_value * split_factor
-            net_quantity = net_quantity * split_factor
+            net_quantity = net_quantity / split_factor
             split_msg = f": adjusted values for stock splits with an assumed split-factor of {split_factor}"
 
         return (
