@@ -4,3 +4,5 @@ personal/*
 !personal/README.md
 notebook_personal.ipynb
 .venv/
+legacy/
+.streamlit/
