@@ -1,0 +1,23 @@
+# Core Streamlit dependencies
+streamlit==1.39.0
+plotly>=5.17.0
+
+# Data processing and financial data
+pandas==2.2.3
+numpy==2.1.3
+yfinance[nospam]>=0.2.54
+requests>=2.31.0
+requests-cache>=1.1.0
+
+# Excel file handling
+openpyxl==3.1.5
+xlsxwriter>=3.1.0
+
+# PDF export functionality
+weasyprint==62.3
+
+# Legacy converter support
+babel>=2.12.0
+
+# Development dependencies
+pytest>=7.4.0 
