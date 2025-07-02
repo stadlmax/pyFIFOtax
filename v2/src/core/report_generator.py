@@ -380,13 +380,31 @@ class ReportGenerator:
                 if not share.sell_date:
                     continue
 
+                # Format buy price with split information
+                buy_price_display = f"{share.buy_price:.2f} {share.currency}"
+                if (
+                    share.original_buy_price
+                    and share.cumulative_split_factor != Decimal("1")
+                ):
+                    buy_price_display += f" (orig. {share.original_buy_price:.2f}, {share.cumulative_split_factor}:1 split)"
+
                 row = {
                     "Symbol": symbol,
                     "Quantity": float(share.quantity),
                     "Buy Date": share.buy_date.strftime("%Y-%m-%d"),
                     "Sell Date": share.sell_date.strftime("%Y-%m-%d"),
-                    "Buy Price": f"{share.buy_price:.2f} {share.currency}",
+                    "Buy Price": buy_price_display,
                     "Sell Price": f"{share.sell_price:.2f} {share.currency}",
+                    "Original Buy Price": (
+                        f"{share.original_buy_price:.2f} {share.currency}"
+                        if share.original_buy_price
+                        else buy_price_display
+                    ),
+                    "Split Factor": (
+                        f"{share.cumulative_split_factor}:1"
+                        if share.cumulative_split_factor != Decimal("1")
+                        else "None"
+                    ),
                 }
 
                 if mode == "daily":

@@ -45,7 +45,7 @@ class FIFOShare:
     symbol: str
     quantity: Decimal
     buy_date: date
-    buy_price: Decimal  # Price per share in original currency
+    buy_price: Decimal  # Price per share in original currency (adjusted for splits)
     currency: str
     source: str = "Purchase"  # Description of how share was acquired
     sell_date: Optional[date] = None
@@ -54,6 +54,12 @@ class FIFOShare:
     sell_cost_currency: Optional[str] = None
     buy_cost: Optional[Decimal] = None  # Transaction costs when buying
     buy_cost_currency: Optional[str] = None
+
+    # Split tracking fields
+    original_buy_price: Optional[Decimal] = None  # Original price before any splits
+    cumulative_split_factor: Decimal = Decimal(
+        "1"
+    )  # Cumulative split factor from all splits
 
     # EUR converted values (filled during processing)
     buy_price_eur_daily: Optional[Decimal] = None
@@ -291,8 +297,20 @@ class FIFOQueue:
     def apply_split(self, split_factor: Decimal):
         self.total_quantity = Decimal("0")
         for asset in self.assets:
+            # Track original price on first split
+            if isinstance(asset, FIFOShare) and asset.original_buy_price is None:
+                asset.original_buy_price = asset.buy_price
+
+            # Update quantities and prices
             asset.quantity = asset.quantity * split_factor
             asset.buy_price = asset.buy_price / split_factor
+
+            # Update cumulative split factor for shares
+            if isinstance(asset, FIFOShare):
+                asset.cumulative_split_factor = (
+                    asset.cumulative_split_factor * split_factor
+                )
+
             self.total_quantity += asset.quantity
 
     def _create_asset_copy(self, original_asset, new_quantity):
@@ -307,6 +325,8 @@ class FIFOQueue:
                 source=original_asset.source,
                 buy_cost=original_asset.buy_cost,
                 buy_cost_currency=original_asset.buy_cost_currency,
+                original_buy_price=original_asset.original_buy_price,
+                cumulative_split_factor=original_asset.cumulative_split_factor,
             )
         elif isinstance(original_asset, FIFOForex):
             return FIFOForex(
