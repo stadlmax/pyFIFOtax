@@ -38,28 +38,67 @@ def show():
 
             # Group debug steps by event
             events_with_steps = _group_steps_by_event(
-                debug_processor.debug_steps, st.session_state.imported_events
+                debug_processor.debug_steps,
+                st.session_state.imported_events,
+                debug_processor,
             )
 
-            st.success(
-                f"✅ Processed {len(st.session_state.imported_events)} events with {len(debug_processor.debug_steps)} FIFO operations"
-            )
+            # Display processing results
+            if debug_processor.has_errors:
+                st.error(
+                    f"❌ FIFO Queue Error: Processing stopped after {debug_processor.events_processed_before_error} events"
+                )
+                st.warning(
+                    f"⚠️ Error in event {debug_processor.error_event_index + 1}: {debug_processor.error_message}"
+                )
+                st.info(
+                    "📋 Tax reports cannot be generated when FIFO errors occur. Review the error details below."
+                )
+
+                # Display error event details
+                if debug_processor.error_event:
+                    st.subheader("🔍 Error Event Details")
+                    _display_error_event_details(
+                        debug_processor.error_event, debug_processor
+                    )
+            else:
+                st.success(
+                    f"✅ Processed {len(st.session_state.imported_events)} events with {len(debug_processor.debug_steps)} FIFO operations"
+                )
 
             # Display events with their FIFO operations
             if events_with_steps:
-                st.subheader("📋 Events and FIFO Operations")
+                st.subheader(f"📋 Events and FIFO Operations")
+                if debug_processor.has_errors:
+                    st.info(
+                        f"✅ {debug_processor.events_processed_before_error} events processed successfully, then ❌ error occurred at event {debug_processor.error_event_index + 1}"
+                    )
 
-                for event_info in events_with_steps:
+                for i, event_info in enumerate(events_with_steps):
                     event = event_info["event"]
                     steps = event_info["steps"]
 
                     # Create event summary
                     event_summary = _get_event_summary(event)
 
-                    with st.expander(f"{event_summary}", expanded=False):
+                    # Mark error event with special styling
+                    is_error_event = (
+                        debug_processor.has_errors
+                        and debug_processor.error_event
+                        and event is debug_processor.error_event
+                    )
+
+                    if is_error_event:
+                        event_summary = f"🔴 {event_summary} - **ERROR EVENT**"
+                        expanded = True
+                    else:
+                        expanded = False
+
+                    with st.expander(
+                        f"Event {i+1}: {event_summary}", expanded=expanded
+                    ):
                         if steps:
                             _display_interleaved_flow(steps)
-
                         else:
                             st.write("*No FIFO operations for this event*")
             else:
@@ -70,13 +109,23 @@ def show():
             st.exception(e)
 
 
-def _group_steps_by_event(debug_steps, events):
+def _group_steps_by_event(debug_steps, events, debug_processor):
     """Group debug steps by their originating event"""
     # Create a mapping using event index for unique identification
     event_map = {}
     for i, event in enumerate(events):
         key = i  # Use the event index as the unique key
         event_map[key] = event
+
+    # Determine how many events to show based on error state
+    if debug_processor.has_errors:
+        # Show all successfully processed events plus the error event
+        max_event_index = debug_processor.error_event_index
+        show_error_event = True
+    else:
+        # Show all events
+        max_event_index = len(events) - 1
+        show_error_event = False
 
     # Group steps by event using event_index
     events_with_steps = []
@@ -85,6 +134,10 @@ def _group_steps_by_event(debug_steps, events):
 
     for step in debug_steps:
         step_key = step.event_index
+
+        # Only process steps for events we want to show
+        if step_key > max_event_index:
+            continue
 
         if step_key != current_event_key:
             # Save previous event if it exists
@@ -106,7 +159,7 @@ def _group_steps_by_event(debug_steps, events):
             {"event": event_map[current_event_key], "steps": current_steps}
         )
 
-    # Also add events that had no FIFO operations
+    # Also add events that had no FIFO operations (but only up to the limit)
     processed_event_indices = {info["event"] for info in events_with_steps}
     processed_indices = set()
     for info in events_with_steps:
@@ -117,13 +170,12 @@ def _group_steps_by_event(debug_steps, events):
                 break
 
     for i, event in enumerate(events):
-        if i not in processed_indices:
+        # Only add events up to our limit
+        if i <= max_event_index and i not in processed_indices:
             events_with_steps.append({"event": event, "steps": []})
 
-    # Sort by date and event type
-    events_with_steps.sort(
-        key=lambda x: (x["event"].date, x["event"].__class__.__name__)
-    )
+    # Sort by event index to maintain processing order
+    events_with_steps.sort(key=lambda x: events.index(x["event"]))
 
     return events_with_steps
 
@@ -140,15 +192,30 @@ def _display_interleaved_flow(steps):
     # Get all relevant queues for this event
     all_relevant_queues = set()
     for step in steps:
-        relevant_queues = _get_relevant_queues_for_step(step, steps, 0)
-        for queue in relevant_queues:
-            if queue["symbol"] != "EUR":  # Exclude EUR
-                all_relevant_queues.add((queue["type"], queue["symbol"]))
+        if step.queue_symbol != "EUR":  # Exclude EUR
+            all_relevant_queues.add((step.queue_type, step.queue_symbol))
 
     # Convert to sorted list for consistent ordering
     relevant_queue_list = sorted(list(all_relevant_queues))
 
+    # Initialize all queue states with the first available state for each queue
+    for step in steps:
+        # Skip EUR forex operations
+        if step.queue_type == "FOREX" and step.queue_symbol == "EUR":
+            continue
+
+        queue_key = f"{step.queue_type}_{step.queue_symbol}"
+        if (
+            queue_key not in current_queue_states
+            and step.queue_state_before is not None
+        ):
+            current_queue_states[queue_key] = step.queue_state_before
+
     for i, step in enumerate(steps):
+        # Skip EUR forex operations completely
+        if step.queue_type == "FOREX" and step.queue_symbol == "EUR":
+            continue
+
         operation_icon = {
             "POP": "🔽",
             "PUSH": "🔼",
@@ -156,6 +223,7 @@ def _display_interleaved_flow(steps):
             "INITIAL": "🏁",
             "NOTE": "📝",
             "CLEAR": "🧹",
+            "ERROR": "🔴",
         }.get(step.operation, "❓")
 
         queue_key = f"{step.queue_type}_{step.queue_symbol}"
@@ -172,6 +240,8 @@ def _display_interleaved_flow(steps):
         # Show the operation
         if step.operation == "NOTE":
             st.write(f"    **{operation_icon}** {step.description}")
+        elif step.operation == "ERROR":
+            st.error(f"**{operation_icon} {step.operation}** {step.description}")
         else:
             st.write(
                 f"**{operation_icon} {step.operation}** {queue_key}: {step.description}"
@@ -334,67 +404,6 @@ def _display_objects_table(objects_data, table_type="Objects"):
         st.write(f"*No {table_type.lower()}*")
 
 
-def _get_relevant_queues_for_step(step, all_steps, step_index):
-    """Get relevant queues to display for context around a step"""
-    # Start with the step's own queue
-    relevant_queues = [
-        {
-            "key": f"{step.queue_type}_{step.queue_symbol}",
-            "type": step.queue_type,
-            "symbol": step.queue_symbol,
-            "before_state": step.queue_state_before,
-            "after_state": step.queue_state_after,
-        }
-    ]
-
-    # For buy/sell events involving shares, also show relevant FOREX queues
-    if step.queue_type == "SHARES" and step.operation in ["PUSH", "POP"]:
-        # Look for FOREX operations in nearby steps from the same event
-        for other_step in all_steps:
-            if (
-                other_step.event_index == step.event_index
-                and other_step.queue_type == "FOREX"
-                and other_step.queue_symbol != "EUR"  # Exclude EUR as requested
-                and other_step.operation in ["PUSH", "POP"]
-            ):
-                # Add this FOREX queue if not already present
-                forex_key = f"{other_step.queue_type}_{other_step.queue_symbol}"
-                if not any(q["key"] == forex_key for q in relevant_queues):
-                    relevant_queues.append(
-                        {
-                            "key": forex_key,
-                            "type": other_step.queue_type,
-                            "symbol": other_step.queue_symbol,
-                            "before_state": other_step.queue_state_before,
-                            "after_state": other_step.queue_state_after,
-                        }
-                    )
-
-    # Similarly, for FOREX operations, show related SHARES queues
-    elif step.queue_type == "FOREX" and step.operation in ["PUSH", "POP"]:
-        # Look for SHARES operations in nearby steps from the same event
-        for other_step in all_steps:
-            if (
-                other_step.event_index == step.event_index
-                and other_step.queue_type == "SHARES"
-                and other_step.operation in ["PUSH", "POP"]
-            ):
-                # Add this SHARES queue if not already present
-                shares_key = f"{other_step.queue_type}_{other_step.queue_symbol}"
-                if not any(q["key"] == shares_key for q in relevant_queues):
-                    relevant_queues.append(
-                        {
-                            "key": shares_key,
-                            "type": other_step.queue_type,
-                            "symbol": other_step.queue_symbol,
-                            "before_state": other_step.queue_state_before,
-                            "after_state": other_step.queue_state_after,
-                        }
-                    )
-
-    return relevant_queues
-
-
 def _display_current_queue_states(relevant_queue_list, current_queue_states):
     """Display current states of relevant queues side by side"""
     if not relevant_queue_list or not current_queue_states:
@@ -458,3 +467,80 @@ def _get_event_summary(event):
             return f"🔄 {date_str} | {event_type} {event.source_amount} {event.source_currency} → {event.target_amount} {event.target_currency}"
         else:
             return f"📊 {date_str} | {event_type}"
+
+
+def _display_error_event_details(error_event, debug_processor):
+    """Display detailed information about the event that caused the error"""
+
+    # Show event summary
+    event_summary = _get_event_summary(error_event)
+    st.write(f"**Event:** {event_summary}")
+
+    # Show error message
+    st.error(f"**Error Message:** {debug_processor.error_message}")
+
+    # Show event details
+    st.write("**Event Details:**")
+    event_details = {}
+    for attr in dir(error_event):
+        if not attr.startswith("_") and not callable(getattr(error_event, attr)):
+            value = getattr(error_event, attr)
+            if value is not None:
+                event_details[attr] = value
+
+    if event_details:
+        import pandas as pd
+
+        df_event = pd.DataFrame([event_details])
+        st.dataframe(df_event, use_container_width=True, hide_index=True)
+
+    # Show current queue states
+    st.write("**Current Queue States at Time of Error:**")
+    queue_states = debug_processor.get_current_queue_states()
+
+    if queue_states:
+        # Group by type
+        shares_queues = {k: v for k, v in queue_states.items() if v["type"] == "SHARES"}
+        forex_queues = {k: v for k, v in queue_states.items() if v["type"] == "FOREX"}
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.write("**📈 Share Queues:**")
+            if shares_queues:
+                for queue_name, queue_info in shares_queues.items():
+                    st.write(f"**{queue_name}** ({queue_info['count']} items)")
+                    if queue_info["state"]:
+                        df_shares = pd.DataFrame(queue_info["state"])
+                        st.dataframe(
+                            df_shares,
+                            use_container_width=True,
+                            hide_index=True,
+                            height=min(200, 35 + 35 * len(df_shares)),
+                        )
+                    else:
+                        st.write("*Empty queue*")
+                    st.write("")  # Add spacing
+            else:
+                st.write("*No active share queues*")
+
+        with col2:
+            st.write("**💰 Forex Queues:**")
+            if forex_queues:
+                for queue_name, queue_info in forex_queues.items():
+                    st.write(f"**{queue_name}** ({queue_info['count']} items)")
+                    if queue_info["state"]:
+                        df_forex = pd.DataFrame(queue_info["state"])
+                        st.dataframe(
+                            df_forex,
+                            use_container_width=True,
+                            hide_index=True,
+                            height=min(200, 35 + 35 * len(df_forex)),
+                        )
+                    else:
+                        st.write("*Empty queue*")
+                    st.write("")  # Add spacing
+            else:
+                st.write("*No active forex queues*")
+    else:
+        st.write("*All queues are empty*")

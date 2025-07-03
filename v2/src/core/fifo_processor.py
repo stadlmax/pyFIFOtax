@@ -24,7 +24,7 @@ class FIFODebugStep:
     event_date: date
     event_symbol: Optional[str]
     event_index: int  # Index of the event in the processing order
-    operation: str  # "PUSH", "POP", "SPLIT", "STATE", "INITIAL", "NOTE", etc.
+    operation: str  # "PUSH", "POP", "SPLIT", "STATE", "INITIAL", "NOTE", "ERROR", etc.
     description: str
     queue_type: str  # "SHARES", "FOREX"
     queue_symbol: str
@@ -456,6 +456,13 @@ class FIFOProcessor:
         self.step_counter: int = 0
         self.current_event_index: int = 0
 
+        # Error tracking
+        self.has_errors: bool = False
+        self.error_event: Optional[Any] = None
+        self.error_event_index: Optional[int] = None
+        self.error_message: Optional[str] = None
+        self.events_processed_before_error: int = 0
+
         # Initialize EUR queue
         self.held_forex["EUR"] = FIFOQueue(is_eur_queue=True)
 
@@ -478,6 +485,13 @@ class FIFOProcessor:
         self.debug_steps.clear()
         self.step_counter = 0
         self.current_event_index = 0
+
+        # Reset error tracking
+        self.has_errors = False
+        self.error_event = None
+        self.error_event_index = None
+        self.error_message = None
+        self.events_processed_before_error = 0
 
         # Reinitialize EUR queue
         self.held_forex["EUR"] = FIFOQueue(is_eur_queue=True)
@@ -511,6 +525,32 @@ class FIFOProcessor:
             return []
 
         return [self._asset_to_dict(asset) for asset in popped_assets]
+
+    def get_current_queue_states(self) -> Dict[str, Dict[str, Any]]:
+        """Get current states of all queues for error debugging"""
+        queue_states = {}
+
+        # Capture share queues
+        for symbol, queue in self.held_shares.items():
+            if not queue.is_empty():
+                queue_states[f"SHARES_{symbol}"] = {
+                    "type": "SHARES",
+                    "symbol": symbol,
+                    "state": self._capture_queue_state(queue),
+                    "count": len(queue.assets),
+                }
+
+        # Capture forex queues (exclude EUR)
+        for currency, queue in self.held_forex.items():
+            if not queue.is_empty() and currency != "EUR":
+                queue_states[f"FOREX_{currency}"] = {
+                    "type": "FOREX",
+                    "symbol": currency,
+                    "state": self._capture_queue_state(queue),
+                    "count": len(queue.assets),
+                }
+
+        return queue_states
 
     def _record_debug_step(
         self,
@@ -573,26 +613,51 @@ class FIFOProcessor:
 
         for event_index, event in enumerate(sorted_events):
             self.current_event_index = event_index
-            if isinstance(event, RSUEvent):
-                self._process_rsu_event(event)
-            elif isinstance(event, ESPPEvent):
-                self._process_espp_event(event)
-            elif isinstance(event, BuyEvent):
-                self._process_buy_event(event)
-            elif isinstance(event, SellEvent):
-                self._process_sell_event(event)
-            elif isinstance(event, DividendEvent):
-                self._process_dividend_event(event)
-            elif isinstance(event, TaxEvent):
-                self._process_tax_event(event)
-            elif isinstance(event, MoneyDepositEvent):
-                self._process_money_deposit_event(event)
-            elif isinstance(event, MoneyWithdrawalEvent):
-                self._process_money_withdrawal_event(event)
-            elif isinstance(event, CurrencyConversionEvent):
-                self._process_currency_conversion_event(event)
-            elif isinstance(event, StockSplitEvent):
-                self._process_stock_split_event(event)
+
+            try:
+                if isinstance(event, RSUEvent):
+                    self._process_rsu_event(event)
+                elif isinstance(event, ESPPEvent):
+                    self._process_espp_event(event)
+                elif isinstance(event, BuyEvent):
+                    self._process_buy_event(event)
+                elif isinstance(event, SellEvent):
+                    self._process_sell_event(event)
+                elif isinstance(event, DividendEvent):
+                    self._process_dividend_event(event)
+                elif isinstance(event, TaxEvent):
+                    self._process_tax_event(event)
+                elif isinstance(event, MoneyDepositEvent):
+                    self._process_money_deposit_event(event)
+                elif isinstance(event, MoneyWithdrawalEvent):
+                    self._process_money_withdrawal_event(event)
+                elif isinstance(event, CurrencyConversionEvent):
+                    self._process_currency_conversion_event(event)
+                elif isinstance(event, StockSplitEvent):
+                    self._process_stock_split_event(event)
+
+                # If we successfully processed the event, increment counter
+                self.events_processed_before_error += 1
+
+            except ValueError as e:
+                # Record error details
+                self.has_errors = True
+                self.error_event = event
+                self.error_event_index = event_index
+                self.error_message = str(e)
+
+                # Record error in debug steps
+                self._record_debug_step(
+                    event,
+                    "ERROR",
+                    f"FIFO Queue Error: {str(e)}",
+                    "SYSTEM",
+                    "ERROR",
+                    None,
+                )
+
+                # Stop processing to prevent cascading errors
+                break
 
     def _process_rsu_event(self, event):
         """Process RSU vesting event"""

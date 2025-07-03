@@ -110,6 +110,17 @@ def show_tax_reports():
                     st.session_state.imported_events
                 )
 
+                # Check for FIFO errors
+                if st.session_state.fifo_processor.has_errors:
+                    st.error(
+                        "❌ FIFO Queue Error: Cannot generate tax reports due to processing errors"
+                    )
+                    st.error(f"Error: {st.session_state.fifo_processor.error_message}")
+                    st.info(
+                        "📋 Please review the FIFO Debug page to diagnose and fix the issue"
+                    )
+                    return
+
                 # Generate reports
                 st.session_state.tax_reports = (
                     st.session_state.report_generator.generate_tax_report(
@@ -303,6 +314,17 @@ def show_awv_reports():
                 st.session_state.fifo_processor.process_events(
                     st.session_state.imported_events
                 )
+
+                # Check for FIFO errors
+                if st.session_state.fifo_processor.has_errors:
+                    st.error(
+                        "❌ FIFO Queue Error: Cannot generate AWV reports due to processing errors"
+                    )
+                    st.error(f"Error: {st.session_state.fifo_processor.error_message}")
+                    st.info(
+                        "📋 Please review the FIFO Debug page to diagnose and fix the issue"
+                    )
+                    return
 
                 # Generate AWV reports
                 st.session_state.awv_reports = (
