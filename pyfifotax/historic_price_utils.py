@@ -222,12 +222,19 @@ class YFinanceCacheManager:
 def get_closest_price_from_date(prices: pd.Series, date: datetime.date):
     found = False
     price = prices.iloc[0]  # mostly for typing / linting
+    tries = 14
     while not found:
+        if tries <= 0:
+            logging.error("Could not collect preceding prices for the instrument for the past two weeks")
+            break
+
         try:
             price = prices[date]
             found = True
         except KeyError:
             date = date - datetime.timedelta(days=1)
+            tries -= 1
+
     return price
 
 
