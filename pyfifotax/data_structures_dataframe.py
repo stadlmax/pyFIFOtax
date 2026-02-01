@@ -62,10 +62,8 @@ class ESPPRow(DataFrameRow):
             details["PurchaseFairMarketValue"].strip("$").replace(",", "")
         )
 
-        # ESPP typically evaluated at close
-        is_historic, hist_price = is_price_historic(
-            buy_price, symbol, date, kind="Close"
-        )
+        is_historic, hist_price = is_price_historic(buy_price, symbol, date)
+
         if is_historic:
             split_msg = ""
         else:
@@ -141,10 +139,8 @@ class RSURow(DataFrameRow):
 
         award_id = details["AwardId"]
 
-        # RSU typically evaluated at close
-        is_historic, hist_price = is_price_historic(
-            fair_market_value, symbol, date, kind="Close"
-        )
+        is_historic, hist_price = is_price_historic(fair_market_value, symbol, date)
+
         if is_historic:
             split_msg = ""
         else:
@@ -187,10 +183,8 @@ class RSURow(DataFrameRow):
 
         award_id = details["AwardId"]
 
-        # RSU typically evaluated at close
-        is_historic, hist_price = is_price_historic(
-            fair_market_value, symbol, date, kind="Close"
-        )
+        is_historic, hist_price = is_price_historic(fair_market_value, symbol, date)
+
         if is_historic:
             split_msg = ""
         else:
