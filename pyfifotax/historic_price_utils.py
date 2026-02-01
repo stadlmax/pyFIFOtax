@@ -235,7 +235,7 @@ def get_closest_price_from_date(prices: pd.Series, date: datetime.date):
             date = date - datetime.timedelta(days=1)
             tries -= 1
 
-    return price
+    return price['close_price']
 
 
 class HistoricPrices:
