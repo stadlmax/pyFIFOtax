@@ -229,7 +229,7 @@ def get_closest_price_from_date(prices: pd.Series, date: datetime.date):
             break
 
         try:
-            price = prices[date]
+            price = prices.loc[date]
             found = True
         except KeyError:
             date = date - datetime.timedelta(days=1)
