@@ -6,3 +6,5 @@ notebook_personal.ipynb
 .venv/
 legacy/
 .streamlit/
+**.DS_Store
+.vscode/
