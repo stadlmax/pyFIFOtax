@@ -1,4 +1,6 @@
+import datetime
 import json
+import logging
 
 import pandas as pd
 
@@ -13,7 +15,47 @@ from pyfifotax.data_structures_dataframe import (
     MoneyTransferRow,
     TaxReversalRow,
 )
+from pyfifotax.historic_price_utils import detect_split_adjustment
 from pyfifotax.utils import create_report_sheet
+
+logger = logging.getLogger("pyfifotax")
+
+
+def _prescan_fmv_entries(transactions: list[dict]) -> list[tuple[float, str, datetime.date]]:
+    """Extract (fmv, symbol, date) from RSU and ESPP entries for split detection."""
+    entries = []
+    for e in transactions:
+        symbol = e.get("Symbol")
+        if not symbol:
+            continue
+        details_list = e.get("TransactionDetails", [])
+        if len(details_list) != 1:
+            continue
+        details = details_list[0].get("Details", {})
+
+        if e["Action"] == "Lapse" and e["Description"] == "Restricted Stock Lapse":
+            fmv_str = details.get("FairMarketValuePrice", "")
+            if fmv_str:
+                fmv = pd.to_numeric(fmv_str.strip("$").replace(",", ""))
+                date = datetime.datetime.strptime(e["Date"], "%m/%d/%Y").date()
+                entries.append((fmv, symbol, date))
+
+        elif e["Action"] == "Deposit" and e["Description"] == "RS":
+            fmv_str = details.get("VestFairMarketValue", "")
+            if fmv_str:
+                fmv = pd.to_numeric(fmv_str.strip("$").replace(",", ""))
+                date = datetime.datetime.strptime(e["Date"], "%m/%d/%Y").date()
+                entries.append((fmv, symbol, date))
+
+        elif e["Action"] == "Deposit" and e["Description"] == "ESPP":
+            fmv_str = details.get("PurchaseFairMarketValue", "")
+            if fmv_str:
+                fmv = pd.to_numeric(fmv_str.strip("$").replace(",", ""))
+                date_str = details.get("PurchaseDate", e["Date"])
+                date = datetime.datetime.strptime(date_str, "%m/%d/%Y").date()
+                entries.append((fmv, symbol, date))
+
+    return entries
 
 
 def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchange):
@@ -29,9 +71,31 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
 
     with open(json_file_name) as f:
         d = json.load(f)
+
+        # Pre-scan: detect whether Schwab data is already split-adjusted
+        fmv_entries = _prescan_fmv_entries(d["Transactions"])
+        detection = detect_split_adjustment(fmv_entries)
+        skip_adj = detection is True
+
+        if detection is True:
+            logger.info(
+                "Auto-detected split-adjusted data (e.g. Schwab Equity Awards Center). "
+                "Skipping per-entry split adjustment in converter."
+            )
+        elif detection is False:
+            logger.info(
+                "Auto-detected raw (non-split-adjusted) data. "
+                "Applying per-entry split adjustment in converter."
+            )
+        else:
+            logger.info(
+                "Could not auto-detect split adjustment status "
+                "(no entries before a known split). Using default behavior."
+            )
+
         for e in d["Transactions"]:
             if e["Action"] == "Deposit" and e["Description"] == "ESPP":
-                schwab_espp_events.append(ESPPRow.from_schwab_json(e).to_dict())
+                schwab_espp_events.append(ESPPRow.from_schwab_json(e, skip_split_adjustment=skip_adj).to_dict())
 
             # assumption behind RSU: each grant has its own vest/deposit event
             # assumption behind RSU: award-id, year, and month are unique to each
@@ -39,14 +103,14 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
             elif (
                 e["Action"] == "Lapse" and e["Description"] == "Restricted Stock Lapse"
             ):
-                tmp, award_id = RSURow.from_schwab_lapse_json(e)
+                tmp, award_id = RSURow.from_schwab_lapse_json(e, skip_split_adjustment=skip_adj)
                 key = (tmp.date.year, tmp.date.month, award_id)
                 if key in schwab_rsu_lapse_events:
                     raise RuntimeError(f"Found duplicated RSU Lapse event: {tmp}")
                 schwab_rsu_lapse_events[key] = tmp
 
             elif e["Action"] == "Deposit" and e["Description"] == "RS":
-                tmp, award_id = RSURow.from_schwab_deposit_json(e)
+                tmp, award_id = RSURow.from_schwab_deposit_json(e, skip_split_adjustment=skip_adj)
                 key = (tmp.date.year, tmp.date.month, award_id)
                 if key in schwab_rsu_deposit_events:
                     raise RuntimeError(f"Found duplicated RSU deposit event: {tmp}")
@@ -70,7 +134,7 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
                     fees_per_order = total_fees * pd.to_numeric(shares) / total_quantity
                     e_det["FeesAndCommissions"] = f"${fees_per_order:.3}"
                     schwab_sell_events.append(
-                        SellOrderRow.from_schwab_json(e_det).to_dict()
+                        SellOrderRow.from_schwab_json(e_det, skip_split_adjustment=skip_adj).to_dict()
                     )
 
             elif (
@@ -141,7 +205,6 @@ def process_schwab_json(json_file_name, xlsx_file_name, forex_transfer_as_exchan
         for k, v in dfs.items():
             v.sort_values("date", inplace=True)
             create_report_sheet(k, v, writer)
-            # overwrite column width somewhat inline with manual examples
             writer.sheets[k].set_column(1, 20, 16)
 
 

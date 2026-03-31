@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from pandas.core.series import Series
 
-from pyfifotax.historic_price_utils import is_price_historic
+from pyfifotax.historic_price_utils import is_price_historic, classify_price_source
 
 
 @dataclass
@@ -48,32 +48,37 @@ class ESPPRow(DataFrameRow):
     comment: str
 
     @staticmethod
-    def from_schwab_json(json_dict: dict) -> ESPPRow:
+    def from_schwab_json(json_dict: dict, skip_split_adjustment: bool = False) -> ESPPRow:
         symbol = json_dict["Symbol"]
-        quantity = pd.to_numeric(json_dict["Quantity"])
         if not len(json_dict["TransactionDetails"]) == 1:
             raise RuntimeError(
                 "Could not convert ESPP information from Schwab JSON, expected TransactionDetails to be of length 1."
             )
         details = json_dict["TransactionDetails"][0]["Details"]
+
+        shares_withheld_str = details.get("SharesWithheld", "")
+        shares_withheld = pd.to_numeric(shares_withheld_str) if shares_withheld_str else 0
+        if shares_withheld > 0:
+            quantity = pd.to_numeric(details["NetSharesDeposited"])
+        else:
+            quantity = pd.to_numeric(json_dict["Quantity"])
+
         date = datetime.datetime.strptime(details["PurchaseDate"], "%m/%d/%Y").date()
         buy_price = pd.to_numeric(details["PurchasePrice"].strip("$").replace(",", ""))
         fair_market_value = pd.to_numeric(
             details["PurchaseFairMarketValue"].strip("$").replace(",", "")
         )
 
-        is_historic, hist_price = is_price_historic(buy_price, symbol, date)
+        split_msg = ""
+        if not skip_split_adjustment:
+            is_historic, hist_price = is_price_historic(fair_market_value, symbol, date)
 
-        if is_historic:
-            split_msg = ""
-        else:
-            # TODO: look into supporting arbitrary splits
-            # assumptions for now: if adjusted: price < hist_price and integer
-            split_factor = round(hist_price / buy_price)
-            buy_price = buy_price * split_factor
-            fair_market_value = fair_market_value * split_factor
-            quantity = quantity / split_factor
-            split_msg = f"Adjusted values for stock splits with an assumed split-factor of {split_factor} "
+            if not is_historic:
+                split_factor = round(hist_price / fair_market_value)
+                buy_price = buy_price * split_factor
+                fair_market_value = fair_market_value * split_factor
+                quantity = quantity / split_factor
+                split_msg = f"Adjusted values for stock splits with an assumed split-factor of {split_factor} "
 
         return ESPPRow(
             date,
@@ -121,7 +126,7 @@ class RSURow(DataFrameRow):
     comment: str
 
     @staticmethod
-    def from_schwab_lapse_json(json_dict: dict) -> tuple[RSURow, int]:
+    def from_schwab_lapse_json(json_dict: dict, skip_split_adjustment: bool = False) -> tuple[RSURow, int]:
         date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
         symbol = json_dict["Symbol"]
         gross_quantity = pd.to_numeric(json_dict["Quantity"])
@@ -139,17 +144,16 @@ class RSURow(DataFrameRow):
 
         award_id = details["AwardId"]
 
-        is_historic, hist_price = is_price_historic(fair_market_value, symbol, date)
+        split_msg = ""
+        if not skip_split_adjustment:
+            is_historic, hist_price = is_price_historic(fair_market_value, symbol, date)
 
-        if is_historic:
-            split_msg = ""
-        else:
-            # TODO: look into supporting arbitrary splits
-            split_factor = round(hist_price / fair_market_value)
-            fair_market_value = fair_market_value * split_factor
-            net_quantity = net_quantity / split_factor
-            gross_quantity = gross_quantity / split_factor
-            split_msg = f". Adjusted values for stock splits with an assumed split-factor of {split_factor}"
+            if not is_historic:
+                split_factor = round(hist_price / fair_market_value)
+                fair_market_value = fair_market_value * split_factor
+                net_quantity = net_quantity / split_factor
+                gross_quantity = gross_quantity / split_factor
+                split_msg = f". Adjusted values for stock splits with an assumed split-factor of {split_factor}"
 
         return (
             RSURow(
@@ -165,7 +169,7 @@ class RSURow(DataFrameRow):
         )
 
     @staticmethod
-    def from_schwab_deposit_json(json_dict: dict) -> tuple[RSURow, int]:
+    def from_schwab_deposit_json(json_dict: dict, skip_split_adjustment: bool = False) -> tuple[RSURow, int]:
         date = datetime.datetime.strptime(json_dict["Date"], "%m/%d/%Y").date()
         symbol = json_dict["Symbol"]
         net_quantity = pd.to_numeric(json_dict["Quantity"])
@@ -183,16 +187,15 @@ class RSURow(DataFrameRow):
 
         award_id = details["AwardId"]
 
-        is_historic, hist_price = is_price_historic(fair_market_value, symbol, date)
+        split_msg = ""
+        if not skip_split_adjustment:
+            is_historic, hist_price = is_price_historic(fair_market_value, symbol, date)
 
-        if is_historic:
-            split_msg = ""
-        else:
-            # TODO: look into supporting arbitrary splits
-            split_factor = round(hist_price / fair_market_value)
-            fair_market_value = fair_market_value * split_factor
-            net_quantity = net_quantity / split_factor
-            split_msg = f". Adjusted values for stock splits with an assumed split-factor of {split_factor}"
+            if not is_historic:
+                split_factor = round(hist_price / fair_market_value)
+                fair_market_value = fair_market_value * split_factor
+                net_quantity = net_quantity / split_factor
+                split_msg = f". Adjusted values for stock splits with an assumed split-factor of {split_factor}"
 
         return (
             RSURow(
@@ -358,7 +361,7 @@ class SellOrderRow(DataFrameRow):
     comment: str
 
     @staticmethod
-    def from_schwab_json(json_dict: dict) -> SellOrderRow:
+    def from_schwab_json(json_dict: dict, skip_split_adjustment: bool = False) -> SellOrderRow:
         if not len(json_dict["TransactionDetails"]) == 1:
             raise RuntimeError(
                 "Could not convert Sell Order information from Schwab JSON, expected TransactionDetails to be of length 1."
@@ -377,8 +380,16 @@ class SellOrderRow(DataFrameRow):
             details[0]["Details"]["SalePrice"].strip("$").replace(",", "")
         )
 
-        # sell-orders typically should always be denoted in historical values
-        # TODO: check if this is the case and potentially fix
+        split_msg = ""
+        if not skip_split_adjustment:
+            source = classify_price_source(sale_price, symbol, date)
+            if source == "already_adjusted":
+                is_historic, hist_price = is_price_historic(sale_price, symbol, date)
+                if not is_historic and hist_price is not None:
+                    split_factor = round(hist_price / sale_price)
+                    sale_price = sale_price * split_factor
+                    quantity = quantity / split_factor
+                    split_msg = f"Adjusted sale for stock split (factor {split_factor}) "
 
         return SellOrderRow(
             date,
@@ -388,7 +399,7 @@ class SellOrderRow(DataFrameRow):
             "USD",
             fees,
             "USD",
-            "[on Schwab]",
+            f"{split_msg}[on Schwab]",
         )
 
     @staticmethod

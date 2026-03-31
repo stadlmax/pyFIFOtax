@@ -19,6 +19,7 @@ parser.add_argument(
     "-d", "--dir",
     dest="sub_dir",
     type=str,
+    default=".",
     help="directory which contains the transactions and the output",
 )
 parser.add_argument(
