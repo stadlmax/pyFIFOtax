@@ -24,7 +24,7 @@ from pyfifotax.data_structures_fifo import (
     FIFOForex,
     FIFOQueue,
 )
-from pyfifotax.historic_price_utils import get_splits_for_symbol
+from pyfifotax.historic_price_utils import get_splits_for_symbol, detect_split_adjustment
 from pyfifotax.utils import apply_rates_forex_dict, filter_forex_dict, forex_dict_to_df
 from pyfifotax.utils import (
     apply_rates_transact_dict,
@@ -120,6 +120,11 @@ class ReportData:
         # process report events generated from loading raw data
         self.process_report_events()
 
+        # log remaining holdings after FIFO processing
+        for symbol, queue in self.held_shares.items():
+            if queue.total_quantity > 0:
+                logger.info(f"Remaining holdings: {queue.total_quantity:.2f} {symbol}")
+
         # apply rates to awv events
         for z4 in self.awv_z4_events:
             z4.apply_daily_rate(self.daily_rates)
@@ -141,6 +146,21 @@ class ReportData:
             msg += " does not fit your needs, please adopt the new format of transactions as shown in the example."
             logger.warning(msg)
             raw_data = read_data_legacy(self.sub_dir, self.file_name)
+
+        if self.apply_stock_splits and not self.legacy_mode:
+            fmv_entries = []
+            for df in [raw_data.rsu, raw_data.espp]:
+                if df is not None and not df.empty and "fair_market_value" in df.columns:
+                    for _, row in df.iterrows():
+                        fmv_entries.append((row["fair_market_value"], row["symbol"], row["date"]))
+            if fmv_entries:
+                detection = detect_split_adjustment(fmv_entries)
+                if detection is True:
+                    logger.info(
+                        "Auto-detected split-adjusted data in xlsx. "
+                        "Disabling stock split application in report processing."
+                    )
+                    self.apply_stock_splits = False
 
         used_symbols = []
         used_symbols.extend(list(raw_data.rsu.symbol.unique()))

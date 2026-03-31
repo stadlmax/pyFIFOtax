@@ -179,12 +179,22 @@ class YFinanceCacheManager:
         except Exception as e:
             raise RuntimeError(f"Unexpected error while downloading {ticker}: {e}")
 
+    @staticmethod
+    def _normalize_date(value) -> datetime.date:
+        """Normalize pandas/py datetime inputs to datetime.date."""
+        if isinstance(value, datetime.date) and not isinstance(value, datetime.datetime):
+            return value
+        return pd.Timestamp(value).date()
+
     def get_ticker_hist_and_split(self, ticker: str, date: datetime.date):
+        date = self._normalize_date(date)
+
         if not ticker in self.cache_manager:
             # download if not in cache
             self._download_ticker_max_period(ticker)
 
         cached_ticker = self.cache_manager[ticker]
+        cached_ticker["last_update"] = self._normalize_date(cached_ticker["last_update"])
 
         if not cached_ticker["has_hist"]:
             hist_prices, splits, true_hist_prices = None, None, None
@@ -220,22 +230,25 @@ class YFinanceCacheManager:
 
 
 def get_closest_price_from_date(prices: pd.Series, date: datetime.date):
-    found = False
-    price = prices.iloc[0]  # mostly for typing / linting
-    tries = 14
-    while not found:
-        if tries <= 0:
-            logging.error("Could not collect preceding prices for the instrument for the past two weeks")
-            break
+    if prices is None or prices.empty:
+        return None
 
+    # Normalise to date so lookup matches indices created via .dt.date
+    current_date = pd.Timestamp(date).date()
+    tries = 14
+
+    while tries > 0:
         try:
-            price = prices.loc[date]
-            found = True
+            price = prices.loc[current_date]
+            return price["close_price"]
         except KeyError:
-            date = date - datetime.timedelta(days=1)
+            current_date = current_date - datetime.timedelta(days=1)
             tries -= 1
 
-    return price['close_price']
+    logger.warning(
+        "Could not collect preceding prices for the instrument for the past two weeks"
+    )
+    return None
 
 
 class HistoricPrices:
@@ -272,6 +285,11 @@ def get_splits_for_symbol(symbol: str, date: datetime.date):
 
 
 def is_price_historic(price: decimal.Decimal, symbol: str, date: datetime.date):
+    """Check if price matches the true (un-adjusted) historical close within 5%.
+
+    Returns (True, hist_price) if the price is at the original historical level,
+    meaning no split un-adjustment is needed in the converter.
+    """
     hist_price = historic_prices.get_historic_close_price(symbol, date)
     if hist_price is None:
         # if no historic price is available, assume it is historic
@@ -279,8 +297,114 @@ def is_price_historic(price: decimal.Decimal, symbol: str, date: datetime.date):
 
     hist_price = pd.to_numeric(hist_price)
 
-    # allow 5% deviation from historic price
-    if (price - hist_price) / hist_price < pd.to_numeric(0.05):
+    if abs((price - hist_price) / hist_price) < pd.to_numeric(0.05):
         return True, hist_price
 
     return False, hist_price
+
+
+def classify_price_source(
+    price: float, symbol: str, date: datetime.date
+) -> str:
+    """Determine whether a price is split-adjusted or at the raw historical level.
+
+    Compares against both Yahoo's split-adjusted close and the true (un-adjusted)
+    historical close.  Returns one of four explicit outcomes — never silently
+    discards an entry.
+
+    Returns
+    -------
+    "already_adjusted"  price matches the Yahoo split-adjusted close
+    "raw"               price matches the true historical close
+    "no_split"          no split affects this date (both references agree)
+    "unrecognized"      price matches neither reference — possible data problem
+    """
+    adjusted_price = historic_prices.get_yf_close_price(symbol, date)
+    true_price = historic_prices.get_historic_close_price(symbol, date)
+
+    if adjusted_price is None or true_price is None:
+        return "no_split"
+
+    adjusted_price = pd.to_numeric(adjusted_price)
+    true_price = pd.to_numeric(true_price)
+
+    if true_price == 0:
+        return "no_split"
+
+    # No split effect for this date — both prices are the same
+    if abs((adjusted_price - true_price) / true_price) < 0.01:
+        return "no_split"
+
+    d_adj = abs((price - adjusted_price) / adjusted_price) if adjusted_price != 0 else float("inf")
+    d_true = abs((price - true_price) / true_price)
+
+    if d_adj < 0.10:
+        return "already_adjusted"
+    elif d_true < 0.10:
+        return "raw"
+
+    logger.warning(
+        f"{symbol} {date}: price {price} matches neither Yahoo adjusted close "
+        f"({adjusted_price:.2f}, dev {d_adj:.1%}) nor historical close "
+        f"({true_price:.2f}, dev {d_true:.1%}) — classifying as 'unrecognized'"
+    )
+    return "unrecognized"
+
+
+def detect_split_adjustment(
+    entries: list,
+) -> bool | None:
+    """Determine whether a batch of (price, symbol, date) entries is split-adjusted.
+
+    Returns
+    -------
+    True   data is already split-adjusted → skip split application
+    False  data is raw → apply splits normally
+    None   could not determine (no decisive entries found)
+
+    Logs a warning for every ``unrecognized`` entry.  If *all* decisive entries
+    are unrecognized, returns None (could not determine).
+    """
+    adjusted_entries = []
+    raw_entries = []
+    unrecognized_entries = []
+
+    for price, symbol, date in entries:
+        sig = classify_price_source(price, symbol, date)
+        if sig == "already_adjusted":
+            adjusted_entries.append((price, symbol, date))
+        elif sig == "raw":
+            raw_entries.append((price, symbol, date))
+        elif sig == "unrecognized":
+            unrecognized_entries.append((price, symbol, date))
+        # "no_split" entries don't contribute to the vote
+
+    decisive = len(adjusted_entries) + len(raw_entries) + len(unrecognized_entries)
+    if decisive == 0:
+        return None
+
+    if unrecognized_entries:
+        logger.warning(
+            f"Split detection: {len(unrecognized_entries)} entries matched neither "
+            f"adjusted nor historical prices (see warnings above). "
+            f"Decisive signals: {len(adjusted_entries)} adjusted, {len(raw_entries)} raw."
+        )
+
+    if adjusted_entries and not raw_entries:
+        return True
+    elif raw_entries and not adjusted_entries:
+        return False
+
+    if adjusted_entries and raw_entries:
+        logger.warning(
+            f"Mixed split-adjustment signals: {len(adjusted_entries)} adjusted, {len(raw_entries)} raw. "
+            "Falling back to default (apply splits)."
+        )
+        for price, symbol, date in raw_entries:
+            adj_price = historic_prices.get_yf_close_price(symbol, date)
+            true_price = historic_prices.get_historic_close_price(symbol, date)
+            logger.warning(
+                f"  RAW: {symbol} {date} price={price}, "
+                f"Yahoo adjusted={adj_price}, Yahoo historical={true_price}"
+            )
+    return None
