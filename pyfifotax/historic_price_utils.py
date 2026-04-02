@@ -220,22 +220,28 @@ class YFinanceCacheManager:
 
 
 def get_closest_price_from_date(prices: pd.Series, date: datetime.date):
-    found = False
-    price = prices.iloc[0]  # mostly for typing / linting
-    tries = 14
-    while not found:
-        if tries <= 0:
-            logging.error("Could not collect preceding prices for the instrument for the past two weeks")
-            break
+    if prices is None or prices.empty:
+        logger.error(
+            f"Could not collect preceding prices for the instrument for the past two weeks starting from {date}"
+        )
+        return None
 
+    price = prices.iloc[0]  # mostly for typing / linting
+    current_date = date
+    tries = 14
+
+    while tries > 0:
         try:
-            price = prices.loc[date]
-            found = True
+            price = prices.loc[current_date]
+            return price["close_price"]
         except KeyError:
-            date = date - datetime.timedelta(days=1)
+            current_date = current_date - datetime.timedelta(days=1)
             tries -= 1
 
-    return price['close_price']
+    logger.error(
+        f"Could not collect preceding prices for the instrument for the past two weeks starting from {date}"
+    )
+    return None
 
 
 class HistoricPrices:
@@ -280,7 +286,7 @@ def is_price_historic(price: decimal.Decimal, symbol: str, date: datetime.date):
     hist_price = pd.to_numeric(hist_price)
 
     # allow 5% deviation from historic price
-    if (price - hist_price) / hist_price < pd.to_numeric(0.05):
+    if abs(price - hist_price) / hist_price < pd.to_numeric(0.05):
         return True, hist_price
 
     return False, hist_price

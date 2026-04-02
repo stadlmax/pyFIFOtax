@@ -50,26 +50,34 @@ class ESPPRow(DataFrameRow):
     @staticmethod
     def from_schwab_json(json_dict: dict) -> ESPPRow:
         symbol = json_dict["Symbol"]
-        quantity = pd.to_numeric(json_dict["Quantity"])
         if not len(json_dict["TransactionDetails"]) == 1:
             raise RuntimeError(
                 "Could not convert ESPP information from Schwab JSON, expected TransactionDetails to be of length 1."
             )
         details = json_dict["TransactionDetails"][0]["Details"]
+
+        quantity = pd.to_numeric("0")
+        shares_withheld_str = details.get("SharesWithheld", "0")
+        shares_withheld = pd.to_numeric(shares_withheld_str)
+        if shares_withheld > 0:
+            quantity = pd.to_numeric(details["NetSharesDeposited"])
+        else:
+            quantity = pd.to_numeric(json_dict["Quantity"])
+
         date = datetime.datetime.strptime(details["PurchaseDate"], "%m/%d/%Y").date()
         buy_price = pd.to_numeric(details["PurchasePrice"].strip("$").replace(",", ""))
         fair_market_value = pd.to_numeric(
             details["PurchaseFairMarketValue"].strip("$").replace(",", "")
         )
 
-        is_historic, hist_price = is_price_historic(buy_price, symbol, date)
+        is_historic, hist_price = is_price_historic(fair_market_value, symbol, date)
 
         if is_historic:
             split_msg = ""
         else:
             # TODO: look into supporting arbitrary splits
             # assumptions for now: if adjusted: price < hist_price and integer
-            split_factor = round(hist_price / buy_price)
+            split_factor = round(hist_price / fair_market_value)
             buy_price = buy_price * split_factor
             fair_market_value = fair_market_value * split_factor
             quantity = quantity / split_factor
