@@ -120,6 +120,18 @@ class ReportData:
         # process report events generated from loading raw data
         self.process_report_events()
 
+        # log remaining holdings after FIFO processing
+        for symbol, queue in self.held_shares.items():
+            if queue.total_quantity > 0:
+                logger.info(
+                    f"remaining {symbol} holdings: {queue.total_quantity:.2f}"
+                )
+        for symbol, queue in self.held_forex.items():
+            if queue.total_quantity > 0:
+                logger.info(
+                    f"remaining {symbol} holdings: {queue.total_quantity:.2f}"
+                )
+
         # apply rates to awv events
         for z4 in self.awv_z4_events:
             z4.apply_daily_rate(self.daily_rates)

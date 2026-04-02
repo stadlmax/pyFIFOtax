@@ -419,9 +419,9 @@ def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
         return
 
     floats=df.apply(pd.to_numeric, errors="coerce", downcast="float")
-    df.mask(floats.notna(), floats, inplace=True)
+    df_to_write = df.astype(object).mask(floats.notna(), floats)
 
-    df.to_excel(writer, sheet_name=name, index=False, float_format="%.2f")
+    df_to_write.to_excel(writer, sheet_name=name, index=False, float_format="%.2f")
     worksheet = writer.sheets[name]
     worksheet.autofit()  # Adjust column widths to their maximum lengths
     worksheet.set_landscape()
