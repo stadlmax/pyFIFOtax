@@ -148,11 +148,11 @@ class YFinanceCacheManager:
                 splits.sort_index(inplace=True, ascending=True)
                 splits.to_csv(ticker_splits_file)
                 true_hist_prices = adjust_history_for_splits(hist_prices, splits)
-                true_hist_prices.to_csv(ticker_true_hist_file)
-
             else:
                 splits = None
                 true_hist_prices = hist_prices
+
+            true_hist_prices.to_csv(ticker_true_hist_file)
 
             self.file_cache[ticker] = (hist_prices, splits, true_hist_prices)
             self.cache_manager[ticker] = {
