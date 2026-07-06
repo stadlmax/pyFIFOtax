@@ -148,11 +148,11 @@ class YFinanceCacheManager:
                 splits.sort_index(inplace=True, ascending=True)
                 splits.to_csv(ticker_splits_file)
                 true_hist_prices = adjust_history_for_splits(hist_prices, splits)
-                true_hist_prices.to_csv(ticker_true_hist_file)
-
             else:
                 splits = None
                 true_hist_prices = hist_prices
+
+            true_hist_prices.to_csv(ticker_true_hist_file)
 
             self.file_cache[ticker] = (hist_prices, splits, true_hist_prices)
             self.cache_manager[ticker] = {
@@ -187,34 +187,45 @@ class YFinanceCacheManager:
         cached_ticker = self.cache_manager[ticker]
 
         if not cached_ticker["has_hist"]:
-            hist_prices, splits, true_hist_prices = None, None, None
+            return None, None, None
 
-        else:
-            if date < cached_ticker["last_update"]:
-                if ticker in self.file_cache:
-                    hist_prices, splits, true_hist_prices = self.file_cache[ticker]
+        download_history = False
+        hist_prices = splits = true_hist_prices = None
 
-                else:
-                    hist_file = self._get_hist_file_path(ticker)
-                    true_hist_file = self._get_true_hist_file_path(ticker)
-                    splits_file = self._get_splits_file_path(ticker)
+        if date < cached_ticker["last_update"]:
+            if ticker in self.file_cache:
+                hist_prices, splits, true_hist_prices = self.file_cache[ticker]
+            else:
+                hist_file = self._get_hist_file_path(ticker)
+                true_hist_file = self._get_true_hist_file_path(ticker)
+
+                # Sometimes caches files get destroyed
+                if os.path.exists(hist_file) and os.path.exists(true_hist_file):
                     hist_prices = pd.read_csv(hist_file, index_col=0)
                     hist_prices.index = pd.to_datetime(hist_prices.index).date
                     true_hist_prices = pd.read_csv(true_hist_file, index_col=0)
                     true_hist_prices.index = pd.to_datetime(true_hist_prices.index).date
                     if cached_ticker["has_splits"]:
-                        splits = pd.read_csv(splits_file, index_col=0)
-                        splits.index = pd.to_datetime(splits.index).date
+                        splits_file = self._get_splits_file_path(ticker)
+                        if os.path.exists(splits_file):
+                            splits = pd.read_csv(splits_file, index_col=0)
+                            splits.index = pd.to_datetime(splits.index).date
+                        else:
+                            download_history = True
                     else:
                         splits = None
+                else:
+                    download_history = True
+        else:
+            download_history = True
 
-            else:
-                # download if last update is before date
-                # need to download whole range again as events like splits
-                # might have happened since last update
-                self._download_ticker_max_period(ticker)
-                # after download, dataframes are already in cache
-                hist_prices, splits, true_hist_prices = self.file_cache[ticker]
+        if download_history:
+            # download if last update is before date
+            # need to download whole range again as events like splits
+            # might have happened since last update
+            self._download_ticker_max_period(ticker)
+            # after download, dataframes are already in cache
+            hist_prices, splits, true_hist_prices = self.file_cache[ticker]
 
         return hist_prices, splits, true_hist_prices
 

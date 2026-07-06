@@ -429,7 +429,7 @@ def create_report_sheet(name: str, df: pd.DataFrame, writer: pd.ExcelWriter):
     worksheet.hide_gridlines(0)  # Do not hide gridlines
     worksheet.center_horizontally()
 
-    if name == "Foreign Currencies":
+    if name in ["Shares", "Foreign Currencies"]:
         worksheet.set_paper(8)  # A3
     else:
         worksheet.set_paper(9)  # A4
